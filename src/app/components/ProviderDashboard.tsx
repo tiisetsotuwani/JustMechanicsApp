@@ -106,12 +106,13 @@ export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboar
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={async () => {
+                const newStatus = !isOnline;
+                setIsOnline(newStatus);
                 try {
-                  const newStatus = !isOnline;
                   await api.provider.updateAvailability(newStatus, 15);
-                  setIsOnline(newStatus);
                 } catch {
-                  setIsOnline(!isOnline);
+                  // Revert on failure
+                  setIsOnline(!newStatus);
                 }
               }}
               className={`flex items-center justify-center gap-2 py-3 px-4 border-2 rounded-xl transition-colors ${
@@ -202,7 +203,12 @@ export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboar
                         Accept
                       </button>
                       <button
-                        onClick={() => {
+                        onClick={async () => {
+                          try {
+                            await api.bookings.decline(job.id);
+                          } catch {
+                            // Decline locally even if API fails
+                          }
                           setDeclinedJobs((prev) => [...prev, job.id]);
                         }}
                         className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors"

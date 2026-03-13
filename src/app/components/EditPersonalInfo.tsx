@@ -28,7 +28,9 @@ export function EditPersonalInfo({ userProfile, onSave, onBack }: EditPersonalIn
         address: formData.address,
       });
       onSave(formData);
-    } catch {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save to server. Changes saved locally.';
+      setSaveError(message);
       // Save locally even if API fails
       onSave(formData);
     } finally {
@@ -56,6 +58,11 @@ export function EditPersonalInfo({ userProfile, onSave, onBack }: EditPersonalIn
       </div>
 
       <div className="px-6 py-6">
+        {saveError && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-xl mb-4 text-sm">
+            {saveError}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Profile Picture */}
           <div className="bg-white rounded-2xl p-6 shadow-sm">
