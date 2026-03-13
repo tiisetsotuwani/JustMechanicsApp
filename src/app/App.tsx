@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { SplashScreen } from './components/SplashScreen';
 import { LoginScreen } from './components/LoginScreen';
+import { api } from '../utils/api';
 import { CustomerDashboard } from './components/CustomerDashboard';
 import { ProviderDashboard } from './components/ProviderDashboard';
 import { RequestMechanic } from './components/RequestMechanic';
@@ -102,8 +103,16 @@ function App() {
     setActiveBooking(mockBookings[0]);
   }, []);
 
-  const handleLogin = (type: 'customer' | 'provider') => {
+  const handleLogin = (type: 'customer' | 'provider', profile?: { name: string; email: string; phone: string }) => {
     setUserType(type);
+    if (profile) {
+      setUserProfile((prev) => ({
+        ...prev,
+        name: profile.name || prev.name,
+        email: profile.email || prev.email,
+        phone: profile.phone || prev.phone,
+      }));
+    }
     if (type === 'customer') {
       setCurrentScreen('customer-dashboard');
     } else {
@@ -111,7 +120,13 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await api.auth.signout();
+    } catch {
+      // Ignore signout errors
+    }
+    api.setAuthToken(null);
     setUserType(null);
     setCurrentScreen('splash');
     // Reset to login after splash animation
@@ -120,10 +135,27 @@ function App() {
     }, 2500);
   };
 
-  const handleCreateBooking = (booking: Booking) => {
-    const newBooking = { ...booking, id: Date.now().toString(), date: new Date().toISOString() };
-    setBookings([newBooking, ...bookings]);
-    setActiveBooking(newBooking);
+  const handleCreateBooking = async (booking: Booking) => {
+    try {
+      const result = await api.bookings.create({
+        service: booking.service,
+        vehicle: booking.vehicle,
+        location: booking.location || '',
+        description: '',
+      });
+      const newBooking = {
+        ...booking,
+        id: result.booking?.id || Date.now().toString(),
+        date: new Date().toISOString(),
+      };
+      setBookings([newBooking, ...bookings]);
+      setActiveBooking(newBooking);
+    } catch {
+      // Fallback to local booking if API fails
+      const newBooking = { ...booking, id: Date.now().toString(), date: new Date().toISOString() };
+      setBookings([newBooking, ...bookings]);
+      setActiveBooking(newBooking);
+    }
     setCurrentScreen('customer-dashboard');
   };
 
@@ -302,9 +334,9 @@ function App() {
               }`}
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
               </svg>
-              <span className="text-xs">Support</span>
+              <span className="text-xs">Payments</span>
             </button>
           )}
           

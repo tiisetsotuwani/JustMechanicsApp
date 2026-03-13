@@ -108,7 +108,21 @@ export function RequestMechanic({ onBack, onSubmit }: RequestMechanicProps) {
             />
             <button
               type="button"
-              className="text-red-700 text-sm font-medium flex items-center gap-2"
+              onClick={() => {
+                if (navigator.geolocation) {
+                  navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                      setLocation(`${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`);
+                    },
+                    () => {
+                      setLocation('Location access denied - please enter manually');
+                    }
+                  );
+                } else {
+                  setLocation('Geolocation not supported - please enter manually');
+                }
+              }}
+              className="text-red-700 text-sm font-medium flex items-center gap-2 hover:text-red-800"
             >
               <MapPin className="w-4 h-4" />
               Use current location

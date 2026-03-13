@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, User, Mail, Phone, MapPin, Save } from 'lucide-react';
 import type { UserProfile } from '../App';
+import { api } from '../../utils/api';
 
 interface EditPersonalInfoProps {
   userProfile: UserProfile;
@@ -12,15 +13,27 @@ export function EditPersonalInfo({ userProfile, onSave, onBack }: EditPersonalIn
   const [formData, setFormData] = useState<UserProfile>(userProfile);
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    
-    // Simulate save delay
-    setTimeout(() => {
+    setSaveError(null);
+
+    try {
+      await api.profile.update({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+      });
       onSave(formData);
+    } catch {
+      // Save locally even if API fails
+      onSave(formData);
+    } finally {
       setIsSaving(false);
-    }, 500);
+    }
   };
 
   const handleChange = (field: keyof UserProfile, value: string) => {
