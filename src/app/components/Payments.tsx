@@ -29,7 +29,7 @@ export function Payments({ bookings, onBack }: PaymentsProps) {
             <h2 className="text-lg font-semibold">Total Spent</h2>
             <DollarSign className="w-6 h-6" />
           </div>
-          <p className="text-4xl font-bold">${totalSpent.toFixed(2)}</p>
+          <p className="text-4xl font-bold">R{totalSpent.toFixed(2)}</p>
           <p className="text-red-100 mt-2">{completedBookings.length} completed services</p>
         </div>
 
@@ -73,7 +73,7 @@ export function Payments({ bookings, onBack }: PaymentsProps) {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-gray-900">${booking.price?.toFixed(2)}</p>
+                    <p className="font-semibold text-gray-900">R{booking.price?.toFixed(2)}</p>
                     <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-1 rounded-full mt-1">
                       <CheckCircle className="w-3 h-3" />
                       Paid

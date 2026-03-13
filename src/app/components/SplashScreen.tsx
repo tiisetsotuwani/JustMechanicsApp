@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import logoImage from '../../assets/1c30baae5d3fbce3a5794ced261ca572667e4dbf.png';
+import { Wrench } from 'lucide-react';
 
 export function SplashScreen() {
   return (
@@ -14,8 +14,13 @@ export function SplashScreen() {
           initial={{ y: 20 }}
           animate={{ y: 0 }}
           transition={{ delay: 0.3, duration: 0.5 }}
+          className="flex flex-col items-center"
         >
-          <img src={logoImage} alt="JustMechanic Logo" className="w-64 h-auto" />
+          <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center mb-6">
+            <Wrench className="w-20 h-20 text-red-700" />
+          </div>
+          <h1 className="text-5xl font-bold text-white mb-2">JustMechanic</h1>
+          <p className="text-white/90 text-lg">On-Demand Auto Care</p>
         </motion.div>
         
         <motion.div

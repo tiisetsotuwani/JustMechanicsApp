@@ -21,15 +21,15 @@ export function Profile({ userProfile, onBack, onNavigate, onLogout }: ProfilePr
     {
       title: 'Preferences',
       items: [
-        { icon: Bell, label: 'Notifications', action: () => {} },
-        { icon: CreditCard, label: 'Payment Methods', action: () => {} },
+        { icon: Bell, label: 'Notifications', action: () => onNavigate('notifications') },
+        { icon: CreditCard, label: 'Payment Methods', action: () => onNavigate('payment-methods') },
       ],
     },
     {
       title: 'Support',
       items: [
-        { icon: Shield, label: 'Privacy & Security', action: () => {} },
-        { icon: HelpCircle, label: 'Help Center', action: () => {} },
+        { icon: Shield, label: 'Privacy & Security', action: () => onNavigate('privacy') },
+        { icon: HelpCircle, label: 'Help Center', action: () => onNavigate('help') },
       ],
     },
   ];

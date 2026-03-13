@@ -1,21 +1,16 @@
 import { Context } from "npm:hono";
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-);
+import { supabaseServiceRole } from "./supabase-client.tsx";
 
 const BUCKET_NAME = 'make-dd7ceef7-justmechanic';
 
 // Initialize storage bucket
 export const initStorage = async () => {
   try {
-    const { data: buckets } = await supabase.storage.listBuckets();
+    const { data: buckets } = await supabaseServiceRole.storage.listBuckets();
     const bucketExists = buckets?.some(bucket => bucket.name === BUCKET_NAME);
     
     if (!bucketExists) {
-      const { error } = await supabase.storage.createBucket(BUCKET_NAME, {
+      const { error } = await supabaseServiceRole.storage.createBucket(BUCKET_NAME, {
         public: false,
         fileSizeLimit: 5242880, // 5MB
       });
@@ -54,7 +49,7 @@ export const storageRoutes = {
       const uint8Array = new Uint8Array(arrayBuffer);
 
       // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
+      const { data, error } = await supabaseServiceRole.storage
         .from(BUCKET_NAME)
         .upload(filename, uint8Array, {
           contentType: file.type,
@@ -67,7 +62,7 @@ export const storageRoutes = {
       }
 
       // Get signed URL (valid for 1 year)
-      const { data: urlData } = await supabase.storage
+      const { data: urlData } = await supabaseServiceRole.storage
         .from(BUCKET_NAME)
         .createSignedUrl(filename, 31536000);
 
@@ -98,7 +93,7 @@ export const storageRoutes = {
         return c.json({ error: 'Unauthorized to access this file' }, 403);
       }
 
-      const { data, error } = await supabase.storage
+      const { data, error } = await supabaseServiceRole.storage
         .from(BUCKET_NAME)
         .createSignedUrl(path, 3600); // Valid for 1 hour
 
@@ -129,7 +124,7 @@ export const storageRoutes = {
         return c.json({ error: 'Unauthorized to delete this file' }, 403);
       }
 
-      const { error } = await supabase.storage
+      const { error } = await supabaseServiceRole.storage
         .from(BUCKET_NAME)
         .remove([path]);
 
@@ -154,7 +149,7 @@ export const storageRoutes = {
 
       const path = folder ? `${userId}/${folder}` : userId;
 
-      const { data, error } = await supabase.storage
+      const { data, error } = await supabaseServiceRole.storage
         .from(BUCKET_NAME)
         .list(path);
 

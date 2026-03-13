@@ -121,7 +121,7 @@ export function TrackMechanic({ booking, onBack }: TrackMechanicProps) {
                 <div className="border-t border-gray-200 pt-3" />
                 <div className="flex justify-between items-start">
                   <span className="text-gray-900 font-semibold">Estimated Total</span>
-                  <span className="text-xl font-bold text-red-700">${booking.price}</span>
+                  <span className="text-xl font-bold text-red-700">R{booking.price}</span>
                 </div>
               </>
             )}

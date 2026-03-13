@@ -158,7 +158,7 @@ export function Bookings({ bookings, onBack, onViewBooking }: BookingsProps) {
                         <span>{new Date(booking.date).toLocaleDateString()}</span>
                       </div>
                       {booking.price && (
-                        <p className="text-sm font-semibold text-gray-900">${booking.price.toFixed(2)}</p>
+                        <p className="text-sm font-semibold text-gray-900">R{booking.price.toFixed(2)}</p>
                       )}
                     </div>
                     <ChevronRight className="w-5 h-5 text-gray-400" />

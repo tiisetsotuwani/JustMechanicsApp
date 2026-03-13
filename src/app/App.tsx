@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { SplashScreen } from './components/SplashScreen';
 import { LoginScreen } from './components/LoginScreen';
-import { api } from '../utils/api';
 import { CustomerDashboard } from './components/CustomerDashboard';
 import { ProviderDashboard } from './components/ProviderDashboard';
 import { RequestMechanic } from './components/RequestMechanic';
@@ -15,8 +14,13 @@ import { EditPersonalInfo } from './components/EditPersonalInfo';
 import { ManageAddresses } from './components/ManageAddresses';
 import { ManageVehicles } from './components/ManageVehicles';
 import { AIChatBot } from './components/AIChatBot';
+import { PrivacyPolicy } from './components/PrivacyPolicy';
+import { HelpCenter } from './components/HelpCenter';
+import { NotificationSettings } from './components/NotificationSettings';
+import { PaymentMethods } from './components/PaymentMethods';
+import { projectId, publicAnonKey } from '/utils/supabase/info';
 
-type Screen = 'splash' | 'login' | 'customer-dashboard' | 'provider-dashboard' | 'request' | 'track' | 'services' | 'payments' | 'bookings' | 'profile' | 'directory' | 'edit-info' | 'addresses' | 'vehicles' | 'ai-chat';
+type Screen = 'splash' | 'login' | 'customer-dashboard' | 'provider-dashboard' | 'request' | 'track' | 'services' | 'payments' | 'bookings' | 'profile' | 'directory' | 'edit-info' | 'addresses' | 'vehicles' | 'ai-chat' | 'privacy' | 'help' | 'notifications' | 'payment-methods';
 type UserType = null | 'customer' | 'provider';
 
 export interface Booking {
@@ -74,13 +78,67 @@ function App() {
     { id: '1', make: 'Toyota', model: 'Camry', year: '2020', plateNumber: 'ABC123', isDefault: true },
     { id: '2', make: 'Honda', model: 'Civic', year: '2019', plateNumber: 'XYZ789', isDefault: false },
   ]);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
 
+  // Check for existing session on app load
   useEffect(() => {
-    // Show splash screen for 2.5 seconds
-    const timer = setTimeout(() => {
-      setCurrentScreen('login');
-    }, 2500);
-    return () => clearTimeout(timer);
+    const checkSession = async () => {
+      try {
+        const storedToken = localStorage.getItem('access_token');
+        const storedUserType = localStorage.getItem('user_type') as UserType;
+        
+        if (storedToken && storedUserType) {
+          // Verify token with backend
+          const response = await fetch(
+            `https://${projectId}.supabase.co/functions/v1/make-server-dd7ceef7/auth/session`,
+            {
+              headers: {
+                'Authorization': `Bearer ${storedToken}`,
+              }
+            }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            setAccessToken(storedToken);
+            setUserType(storedUserType);
+            
+            // Load user profile
+            if (data.profile) {
+              setUserProfile({
+                name: data.profile.name || 'User',
+                email: data.profile.email || '',
+                phone: data.profile.phone || '',
+                address: data.profile.address || '',
+              });
+            }
+            
+            // Skip splash and go to dashboard
+            setCurrentScreen(storedUserType === 'customer' ? 'customer-dashboard' : 'provider-dashboard');
+            setIsCheckingSession(false);
+            return;
+          } else {
+            // Invalid token, clear storage
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('user_type');
+          }
+        }
+      } catch (error) {
+        console.error('Session check error:', error);
+      }
+      
+      setIsCheckingSession(false);
+      
+      // Show splash screen for new users
+      const timer = setTimeout(() => {
+        setCurrentScreen('login');
+      }, 2500);
+      
+      return () => clearTimeout(timer);
+    };
+
+    checkSession();
   }, []);
 
   useEffect(() => {
@@ -94,7 +152,7 @@ function App() {
         mechanicName: 'Mike Johnson',
         mechanicImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
         estimatedArrival: '15 mins',
-        price: 89.99,
+        price: 899.99,
         location: 'Your Location',
         date: new Date().toISOString(),
       },
@@ -103,16 +161,24 @@ function App() {
     setActiveBooking(mockBookings[0]);
   }, []);
 
-  const handleLogin = (type: 'customer' | 'provider', profile?: { name: string; email: string; phone: string }) => {
+  const handleLogin = (type: 'customer' | 'provider', token: string, profile: any) => {
     setUserType(type);
+    setAccessToken(token);
+    
+    // Save to localStorage for persistence
+    localStorage.setItem('access_token', token);
+    localStorage.setItem('user_type', type);
+    
+    // Update user profile
     if (profile) {
-      setUserProfile((prev) => ({
-        ...prev,
-        name: profile.name || prev.name,
-        email: profile.email || prev.email,
-        phone: profile.phone || prev.phone,
-      }));
+      setUserProfile({
+        name: profile.name || 'User',
+        email: profile.email || '',
+        phone: profile.phone || '',
+        address: profile.address || '',
+      });
     }
+    
     if (type === 'customer') {
       setCurrentScreen('customer-dashboard');
     } else {
@@ -120,42 +186,25 @@ function App() {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await api.auth.signout();
-    } catch {
-      // Ignore signout errors
-    }
-    api.setAuthToken(null);
+  const handleLogout = () => {
+    // Clear local storage
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user_type');
+    
     setUserType(null);
+    setAccessToken(null);
     setCurrentScreen('splash');
+    
     // Reset to login after splash animation
     setTimeout(() => {
       setCurrentScreen('login');
     }, 2500);
   };
 
-  const handleCreateBooking = async (booking: Booking) => {
-    try {
-      const result = await api.bookings.create({
-        service: booking.service,
-        vehicle: booking.vehicle,
-        location: booking.location || '',
-        description: '',
-      });
-      const newBooking = {
-        ...booking,
-        id: result.booking?.id || Date.now().toString(),
-        date: new Date().toISOString(),
-      };
-      setBookings([newBooking, ...bookings]);
-      setActiveBooking(newBooking);
-    } catch {
-      // Fallback to local booking if API fails
-      const newBooking = { ...booking, id: Date.now().toString(), date: new Date().toISOString() };
-      setBookings([newBooking, ...bookings]);
-      setActiveBooking(newBooking);
-    }
+  const handleCreateBooking = (booking: Booking) => {
+    const newBooking = { ...booking, id: Date.now().toString(), date: new Date().toISOString() };
+    setBookings([newBooking, ...bookings]);
+    setActiveBooking(newBooking);
     setCurrentScreen('customer-dashboard');
   };
 
@@ -270,6 +319,30 @@ function App() {
             userType={userType || 'customer'}
           />
         );
+      case 'privacy':
+        return (
+          <PrivacyPolicy
+            onBack={() => setCurrentScreen('profile')}
+          />
+        );
+      case 'help':
+        return (
+          <HelpCenter
+            onBack={() => setCurrentScreen('profile')}
+          />
+        );
+      case 'notifications':
+        return (
+          <NotificationSettings
+            onBack={() => setCurrentScreen('profile')}
+          />
+        );
+      case 'payment-methods':
+        return (
+          <PaymentMethods
+            onBack={() => setCurrentScreen('profile')}
+          />
+        );
       default:
         return userType === 'customer' ? (
           <CustomerDashboard userName={userProfile.name.split(' ')[0]} activeBooking={activeBooking} onNavigate={setCurrentScreen} />
@@ -334,16 +407,16 @@ function App() {
               }`}
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
               </svg>
-              <span className="text-xs">Payments</span>
+              <span className="text-xs">Support</span>
             </button>
           )}
           
           <button
             onClick={() => setCurrentScreen('profile')}
             className={`flex flex-col items-center gap-1 ${
-              currentScreen === 'profile' || currentScreen === 'edit-info' || currentScreen === 'addresses' || currentScreen === 'vehicles' || currentScreen === 'ai-chat' ? 'text-red-700' : 'text-stone-500'
+              currentScreen === 'profile' || currentScreen === 'edit-info' || currentScreen === 'addresses' || currentScreen === 'vehicles' || currentScreen === 'ai-chat' || currentScreen === 'privacy' || currentScreen === 'help' || currentScreen === 'notifications' || currentScreen === 'payment-methods' ? 'text-red-700' : 'text-stone-500'
             }`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

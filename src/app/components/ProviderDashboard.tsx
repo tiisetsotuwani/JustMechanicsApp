@@ -1,6 +1,4 @@
-import { useState } from 'react';
 import { Bell, Settings, CheckCircle, Clock, DollarSign, Star, TrendingUp, Users, Wrench, MessageCircle } from 'lucide-react';
-import { api } from '../../utils/api';
 
 interface ProviderDashboardProps {
   providerName: string;
@@ -8,13 +6,10 @@ interface ProviderDashboardProps {
 }
 
 export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboardProps) {
-  const [isOnline, setIsOnline] = useState(false);
-  const [acceptedJobs, setAcceptedJobs] = useState<string[]>([]);
-  const [declinedJobs, setDeclinedJobs] = useState<string[]>([]);
   const stats = [
     { label: 'Today\'s Jobs', value: '8', icon: Wrench, color: 'bg-blue-100 text-blue-700' },
     { label: 'Completed', value: '156', icon: CheckCircle, color: 'bg-green-100 text-green-700' },
-    { label: 'Revenue', value: '$12,450', icon: DollarSign, color: 'bg-red-100 text-red-700' },
+    { label: 'Revenue', value: 'R124,500', icon: DollarSign, color: 'bg-red-100 text-red-700' },
     { label: 'Rating', value: '4.9', icon: Star, color: 'bg-yellow-100 text-yellow-700' },
   ];
 
@@ -26,7 +21,7 @@ export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboar
       vehicle: 'Honda Accord 2021',
       location: '123 Main St, 2.3 miles away',
       time: '10:30 AM',
-      price: 89.99,
+      price: 899,
       image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
     },
     {
@@ -36,7 +31,7 @@ export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboar
       vehicle: 'Toyota Camry 2020',
       location: '456 Oak Ave, 1.8 miles away',
       time: '11:45 AM',
-      price: 149.99,
+      price: 1499,
       image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
     },
     {
@@ -46,7 +41,7 @@ export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboar
       vehicle: 'Ford F-150 2022',
       location: '789 Pine Rd, 3.5 miles away',
       time: '1:00 PM',
-      price: 199.99,
+      price: 1999,
       image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop',
     },
   ];
@@ -104,25 +99,9 @@ export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboar
         <div className="bg-white rounded-2xl p-6 shadow-sm mb-6">
           <h3 className="font-semibold text-gray-900 mb-4">Quick Actions</h3>
           <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={async () => {
-                const newStatus = !isOnline;
-                setIsOnline(newStatus);
-                try {
-                  await api.provider.updateAvailability(newStatus, 15);
-                } catch {
-                  // Revert on failure
-                  setIsOnline(!newStatus);
-                }
-              }}
-              className={`flex items-center justify-center gap-2 py-3 px-4 border-2 rounded-xl transition-colors ${
-                isOnline
-                  ? 'border-green-600 bg-green-50 text-green-700'
-                  : 'border-red-700 text-red-700 hover:bg-red-50'
-              }`}
-            >
+            <button className="flex items-center justify-center gap-2 py-3 px-4 border-2 border-red-700 text-red-700 rounded-xl hover:bg-red-50 transition-colors">
               <Clock className="w-5 h-5" />
-              <span className="font-medium">{isOnline ? 'Online' : 'Go Online'}</span>
+              <span className="font-medium">Go Online</span>
             </button>
             <button 
               onClick={() => onNavigate('directory')}
@@ -157,7 +136,7 @@ export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboar
                     <p className="text-sm text-gray-600">{job.service}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-bold text-red-700">${job.price}</p>
+                    <p className="text-lg font-bold text-red-700">R{job.price}</p>
                     <p className="text-xs text-gray-500">{job.time}</p>
                   </div>
                 </div>
@@ -179,44 +158,12 @@ export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboar
                 </div>
 
                 <div className="flex gap-3">
-                  {acceptedJobs.includes(job.id) ? (
-                    <div className="flex-1 bg-green-100 text-green-700 py-3 rounded-xl font-semibold text-center">
-                      Accepted
-                    </div>
-                  ) : declinedJobs.includes(job.id) ? (
-                    <div className="flex-1 bg-gray-200 text-gray-500 py-3 rounded-xl font-semibold text-center">
-                      Declined
-                    </div>
-                  ) : (
-                    <>
-                      <button
-                        onClick={async () => {
-                          try {
-                            await api.bookings.accept(job.id);
-                          } catch {
-                            // Accept locally even if API fails
-                          }
-                          setAcceptedJobs((prev) => [...prev, job.id]);
-                        }}
-                        className="flex-1 bg-red-700 text-white py-3 rounded-xl font-semibold hover:bg-red-800 transition-colors"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        onClick={async () => {
-                          try {
-                            await api.bookings.decline(job.id);
-                          } catch {
-                            // Decline locally even if API fails
-                          }
-                          setDeclinedJobs((prev) => [...prev, job.id]);
-                        }}
-                        className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
-                      >
-                        Decline
-                      </button>
-                    </>
-                  )}
+                  <button className="flex-1 bg-red-700 text-white py-3 rounded-xl font-semibold hover:bg-red-800 transition-colors">
+                    Accept
+                  </button>
+                  <button className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors">
+                    Decline
+                  </button>
                 </div>
               </div>
             ))}
@@ -251,7 +198,7 @@ export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboar
             <div>
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-gray-600">Revenue Target</span>
-                <span className="font-semibold text-gray-900">$12,450/$15,000</span>
+                <span className="font-semibold text-gray-900">R124,500/R150,000</span>
               </div>
               <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div className="h-full bg-blue-600 rounded-full" style={{ width: '83%' }}></div>

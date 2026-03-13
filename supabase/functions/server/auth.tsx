@@ -1,11 +1,6 @@
 import { Context } from "npm:hono";
-import { createClient } from "npm:@supabase/supabase-js@2";
 import * as kv from "./kv_store.tsx";
-
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-);
+import { supabaseServiceRole, supabaseAnon } from "./supabase-client.tsx";
 
 export const authRoutes = {
   // Sign up new user
@@ -19,7 +14,7 @@ export const authRoutes = {
       }
 
       // Create user with Supabase Auth
-      const { data, error } = await supabase.auth.admin.createUser({
+      const { data, error } = await supabaseServiceRole.auth.admin.createUser({
         email,
         password,
         user_metadata: { 
@@ -85,12 +80,7 @@ export const authRoutes = {
         return c.json({ error: 'Missing email or password' }, 400);
       }
 
-      const supabaseClient = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      );
-
-      const { data, error } = await supabaseClient.auth.signInWithPassword({
+      const { data, error } = await supabaseAnon.auth.signInWithPassword({
         email,
         password,
       });
@@ -123,7 +113,7 @@ export const authRoutes = {
         return c.json({ error: 'No access token provided' }, 401);
       }
 
-      const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+      const { data: { user }, error } = await supabaseServiceRole.auth.getUser(accessToken);
 
       if (error || !user) {
         return c.json({ error: 'Invalid or expired token' }, 401);
@@ -151,12 +141,7 @@ export const authRoutes = {
         return c.json({ error: 'No access token provided' }, 401);
       }
 
-      const supabaseClient = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      );
-
-      const { error } = await supabaseClient.auth.signOut();
+      const { error } = await supabaseAnon.auth.signOut();
 
       if (error) {
         console.log(`Sign out error: ${error.message}`);
@@ -179,7 +164,7 @@ export const requireAuth = async (c: Context, next: () => Promise<void>) => {
     return c.json({ error: 'Unauthorized: No access token provided' }, 401);
   }
 
-  const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+  const { data: { user }, error } = await supabaseServiceRole.auth.getUser(accessToken);
 
   if (error || !user) {
     return c.json({ error: 'Unauthorized: Invalid or expired token' }, 401);
