@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Bell, Settings, CheckCircle, Clock, DollarSign, Star, TrendingUp, Users, Wrench, MessageCircle } from 'lucide-react';
+import { api } from '../../utils/api';
 
 interface ProviderDashboardProps {
   providerName: string;
@@ -6,6 +8,9 @@ interface ProviderDashboardProps {
 }
 
 export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboardProps) {
+  const [isOnline, setIsOnline] = useState(false);
+  const [acceptedJobs, setAcceptedJobs] = useState<string[]>([]);
+  const [declinedJobs, setDeclinedJobs] = useState<string[]>([]);
   const stats = [
     { label: 'Today\'s Jobs', value: '8', icon: Wrench, color: 'bg-blue-100 text-blue-700' },
     { label: 'Completed', value: '156', icon: CheckCircle, color: 'bg-green-100 text-green-700' },
@@ -99,9 +104,25 @@ export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboar
         <div className="bg-white rounded-2xl p-6 shadow-sm mb-6">
           <h3 className="font-semibold text-gray-900 mb-4">Quick Actions</h3>
           <div className="grid grid-cols-2 gap-3">
-            <button className="flex items-center justify-center gap-2 py-3 px-4 border-2 border-red-700 text-red-700 rounded-xl hover:bg-red-50 transition-colors">
+            <button
+              onClick={async () => {
+                const newStatus = !isOnline;
+                setIsOnline(newStatus);
+                try {
+                  await api.provider.updateAvailability(newStatus, 15);
+                } catch {
+                  // Revert on failure
+                  setIsOnline(!newStatus);
+                }
+              }}
+              className={`flex items-center justify-center gap-2 py-3 px-4 border-2 rounded-xl transition-colors ${
+                isOnline
+                  ? 'border-green-600 bg-green-50 text-green-700'
+                  : 'border-red-700 text-red-700 hover:bg-red-50'
+              }`}
+            >
               <Clock className="w-5 h-5" />
-              <span className="font-medium">Go Online</span>
+              <span className="font-medium">{isOnline ? 'Online' : 'Go Online'}</span>
             </button>
             <button 
               onClick={() => onNavigate('directory')}
@@ -158,12 +179,44 @@ export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboar
                 </div>
 
                 <div className="flex gap-3">
-                  <button className="flex-1 bg-red-700 text-white py-3 rounded-xl font-semibold hover:bg-red-800 transition-colors">
-                    Accept
-                  </button>
-                  <button className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors">
-                    Decline
-                  </button>
+                  {acceptedJobs.includes(job.id) ? (
+                    <div className="flex-1 bg-green-100 text-green-700 py-3 rounded-xl font-semibold text-center">
+                      Accepted
+                    </div>
+                  ) : declinedJobs.includes(job.id) ? (
+                    <div className="flex-1 bg-gray-200 text-gray-500 py-3 rounded-xl font-semibold text-center">
+                      Declined
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await api.bookings.accept(job.id);
+                          } catch {
+                            // Accept locally even if API fails
+                          }
+                          setAcceptedJobs((prev) => [...prev, job.id]);
+                        }}
+                        className="flex-1 bg-red-700 text-white py-3 rounded-xl font-semibold hover:bg-red-800 transition-colors"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await api.bookings.decline(job.id);
+                          } catch {
+                            // Decline locally even if API fails
+                          }
+                          setDeclinedJobs((prev) => [...prev, job.id]);
+                        }}
+                        className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+                      >
+                        Decline
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}

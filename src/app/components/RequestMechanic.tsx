@@ -11,6 +11,7 @@ export function RequestMechanic({ onBack, onSubmit }: RequestMechanicProps) {
   const [selectedService, setSelectedService] = useState('');
   const [vehicle, setVehicle] = useState('');
   const [location, setLocation] = useState('');
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [description, setDescription] = useState('');
 
   const services = [
@@ -108,11 +109,30 @@ export function RequestMechanic({ onBack, onSubmit }: RequestMechanicProps) {
             />
             <button
               type="button"
-              className="text-red-700 text-sm font-medium flex items-center gap-2"
+              onClick={() => {
+                setLocationError(null);
+                if (navigator.geolocation) {
+                  navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                      setLocation(`${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`);
+                      setLocationError(null);
+                    },
+                    () => {
+                      setLocationError('Location access denied — please enter manually');
+                    }
+                  );
+                } else {
+                  setLocationError('Geolocation not supported — please enter manually');
+                }
+              }}
+              className="text-red-700 text-sm font-medium flex items-center gap-2 hover:text-red-800"
             >
               <MapPin className="w-4 h-4" />
               Use current location
             </button>
+            {locationError && (
+              <p className="text-red-500 text-sm mt-2">{locationError}</p>
+            )}
           </div>
 
           {/* Additional Details */}

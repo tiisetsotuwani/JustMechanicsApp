@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { User, Wrench, Mail, Lock } from 'lucide-react';
-import logoImage from 'figma:asset/20fce4d21dc2254c3846902920e2ef4478e12627.png';
+import { User, Wrench, Mail, Lock, UserPlus } from 'lucide-react';
+import logoImage from '../../assets/20fce4d21dc2254c3846902920e2ef4478e12627.png';
+import { api } from '../../utils/api';
 
 interface LoginScreenProps {
-  onLogin: (type: 'customer' | 'provider') => void;
+  onLogin: (type: 'customer' | 'provider', profile?: { name: string; email: string; phone: string }) => void;
 }
 
 export function LoginScreen({ onLogin }: LoginScreenProps) {
@@ -12,10 +13,35 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const [userType, setUserType] = useState<'customer' | 'provider'>('customer');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin(userType);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      if (isSignup) {
+        const result = await api.auth.signup(email, password, name, userType, phone || undefined);
+        if (result.session?.access_token) {
+          api.setAuthToken(result.session.access_token);
+        }
+        onLogin(userType, { name, email, phone });
+      } else {
+        const result = await api.auth.signin(email, password);
+        const profile = result.profile;
+        const detectedUserType = result.user?.user_metadata?.userType || userType;
+        onLogin(detectedUserType, profile ? { name: profile.name || '', email: profile.email || email, phone: profile.phone || '' } : undefined);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Authentication failed. Please try again.';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -36,6 +62,13 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
             {isSignup ? 'Create Account' : 'Welcome Back'}
           </h2>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+              {error}
+            </div>
+          )}
 
           {/* User Type Selection */}
           <div className="grid grid-cols-2 gap-3 mb-6 p-1 bg-gray-100 rounded-xl">
@@ -67,6 +100,26 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Name field - only shown on signup */}
+            {isSignup && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Full Name
+                </label>
+                <div className="relative">
+                  <UserPlus className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="John Doe"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-700 focus:border-transparent"
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Email Address
@@ -97,9 +150,28 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   placeholder="••••••••"
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-700 focus:border-transparent"
                   required
+                  minLength={6}
                 />
               </div>
             </div>
+
+            {/* Phone field - only shown on signup */}
+            {isSignup && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone Number (Optional)
+                </label>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+1 (555) 123-4567"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-700 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            )}
 
             {!isSignup && (
               <div className="flex items-center justify-between text-sm">
@@ -115,9 +187,17 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
             <button
               type="submit"
-              className="w-full bg-red-700 text-white py-3 rounded-xl font-semibold hover:bg-red-800 transition-colors shadow-lg"
+              disabled={isLoading}
+              className="w-full bg-red-700 text-white py-3 rounded-xl font-semibold hover:bg-red-800 transition-colors shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {isSignup ? 'Sign Up' : 'Sign In'} as {userType === 'customer' ? 'Customer' : 'Provider'}
+              {isLoading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  {isSignup ? 'Creating Account...' : 'Signing In...'}
+                </>
+              ) : (
+                <>{isSignup ? 'Sign Up' : 'Sign In'} as {userType === 'customer' ? 'Customer' : 'Provider'}</>
+              )}
             </button>
           </form>
 
@@ -127,7 +207,10 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
               {isSignup ? 'Already have an account?' : "Don't have an account?"}{' '}
               <button
                 type="button"
-                onClick={() => setIsSignup(!isSignup)}
+                onClick={() => {
+                  setIsSignup(!isSignup);
+                  setError(null);
+                }}
                 className="text-red-700 font-semibold hover:text-red-800"
               >
                 {isSignup ? 'Sign In' : 'Sign Up'}

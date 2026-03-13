@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, User, Mail, Phone, MapPin, Save } from 'lucide-react';
 import type { UserProfile } from '../App';
+import { api } from '../../utils/api';
 
 interface EditPersonalInfoProps {
   userProfile: UserProfile;
@@ -12,15 +13,29 @@ export function EditPersonalInfo({ userProfile, onSave, onBack }: EditPersonalIn
   const [formData, setFormData] = useState<UserProfile>(userProfile);
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    
-    // Simulate save delay
-    setTimeout(() => {
+    setSaveError(null);
+
+    try {
+      await api.profile.update({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+      });
       onSave(formData);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save to server. Changes saved locally.';
+      setSaveError(message);
+      // Save locally even if API fails
+      onSave(formData);
+    } finally {
       setIsSaving(false);
-    }, 500);
+    }
   };
 
   const handleChange = (field: keyof UserProfile, value: string) => {
@@ -43,6 +58,11 @@ export function EditPersonalInfo({ userProfile, onSave, onBack }: EditPersonalIn
       </div>
 
       <div className="px-6 py-6">
+        {saveError && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-xl mb-4 text-sm">
+            {saveError}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Profile Picture */}
           <div className="bg-white rounded-2xl p-6 shadow-sm">

@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { api } from '/src/utils/api';
+import { api } from '../../utils/api';
 
 export function BackendExample() {
   const [bookings, setBookings] = useState<any[]>([]);
