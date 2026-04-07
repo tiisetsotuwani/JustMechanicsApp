@@ -1,0 +1,9 @@
+# Supabase Configuration for JustMechanic App
+
+[project]
+name = "JustMechanic"
+region = "us-east-1"
+
+# Edge Functions Configuration
+[functions."make-server-dd7ceef7"]
+verify_jwt = false

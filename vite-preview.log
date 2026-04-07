@@ -1,0 +1,9 @@
+
+> @figma/my-make-file@0.0.1 dev
+> vite --host 127.0.0.1 --port 4173
+
+
+  [32m[1mVITE[22m v6.3.5[39m  [2mready in [0m[1m1060[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m4173[22m/[39m
+[2m8:53:57 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/App.tsx, /src/styles/index.css, /src/app/components/RatingModal.tsx, /src/app/components/JobDocumentation.tsx, /src/app/components/Payments.tsx, /src/app/components/Chat.tsx, /src/app/components/ProviderDashboard.tsx, /src/app/components/Disputes.tsx, /src/app/components/ServiceHistory.tsx, /src/app/components/LoginScreen.tsx, /src/app/components/AdminDashboard.tsx, /src/app/components/onboarding/ProviderOnboarding.tsx[22m
