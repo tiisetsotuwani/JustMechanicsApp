@@ -1,13 +1,68 @@
-import { Bell, Settings, Wrench, MapPin, Car, CreditCard, Droplet, Battery, Target, MoreHorizontal, MessageCircle } from 'lucide-react';
-import type { Booking } from '../App';
+import { useEffect, useState } from 'react';
+import { Bell, Settings, Wrench, MapPin, Car, Droplet, Battery, Target, MoreHorizontal, MessageCircle } from 'lucide-react';
+import { api } from '../../utils/api';
+import type { Booking, Screen } from '../../shared/types';
 
 interface CustomerDashboardProps {
   userName: string;
   activeBooking: Booking | null;
-  onNavigate: (screen: string) => void;
+  pendingBooking: Booking | null;
+  onNavigate: (screen: Screen) => void;
 }
 
-export function CustomerDashboard({ userName, activeBooking, onNavigate }: CustomerDashboardProps) {
+export function CustomerDashboard({ userName, activeBooking, pendingBooking, onNavigate }: CustomerDashboardProps) {
+  const [dispatchStatus, setDispatchStatus] = useState<{
+    bookingStatus?: string;
+    dispatch?: { status?: string; nextIndex?: number; candidateProviderIds?: string[] | null } | null;
+    expiresInSeconds?: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!pendingBooking) {
+      setDispatchStatus(null);
+      return;
+    }
+
+    const loadStatus = async () => {
+      try {
+        const response = await api.dispatch.getStatus(pendingBooking.id);
+        setDispatchStatus(response);
+      } catch {
+        setDispatchStatus(null);
+      }
+    };
+
+    void loadStatus();
+    const interval = window.setInterval(() => {
+      void loadStatus();
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [pendingBooking]);
+
+  const renderDispatchMessage = () => {
+    if (!dispatchStatus?.dispatch) {
+      return 'Searching for mechanics in your area...';
+    }
+
+    const status = dispatchStatus.dispatch.status || 'idle';
+    if (status === 'offered') {
+      return `Offer sent to a nearby mechanic. Reassigning in ${dispatchStatus.expiresInSeconds || 0}s if unanswered.`;
+    }
+    if (status === 'assigned') {
+      return 'Mechanic accepted your request. Opening tracking soon.';
+    }
+    if (status === 'exhausted') {
+      return 'No mechanic accepted yet. We are still searching nearby providers.';
+    }
+
+    const totalCandidates = dispatchStatus.dispatch.candidateProviderIds?.length || 0;
+    const nextIndex = dispatchStatus.dispatch.nextIndex || 0;
+    if (nextIndex > 1) {
+      return `Reassigning request (${nextIndex - 1}/${totalCandidates || '?'})...`;
+    }
+    return 'Searching for mechanics in your area...';
+  };
+
   const services = [
     { id: 'oil', name: 'OIL CHANGE', icon: Droplet },
     { id: 'battery', name: 'BATTERY', icon: Battery },
@@ -32,10 +87,18 @@ export function CustomerDashboard({ userName, activeBooking, onNavigate }: Custo
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <button className="w-10 h-10 flex items-center justify-center">
+            <button
+              aria-label="Open notifications"
+              onClick={() => onNavigate('notifications')}
+              className="w-10 h-10 flex items-center justify-center"
+            >
               <Bell className="w-6 h-6" />
             </button>
-            <button className="w-10 h-10 flex items-center justify-center">
+            <button
+              aria-label="Open settings"
+              onClick={() => onNavigate('profile')}
+              className="w-10 h-10 flex items-center justify-center"
+            >
               <Settings className="w-6 h-6" />
             </button>
           </div>
@@ -104,6 +167,22 @@ export function CustomerDashboard({ userName, activeBooking, onNavigate }: Custo
         </div>
 
         {/* Active Booking */}
+        {pendingBooking && !activeBooking && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm mb-6 border border-amber-100">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-3 h-3 bg-amber-500 rounded-full animate-pulse" />
+              <p className="font-semibold text-gray-900">Request in progress</p>
+            </div>
+            <p className="text-sm text-gray-700">{renderDispatchMessage()}</p>
+            <button
+              onClick={() => onNavigate('bookings')}
+              className="mt-4 text-red-700 font-medium text-sm"
+            >
+              View request details
+            </button>
+          </div>
+        )}
+
         {activeBooking && (
           <div className="bg-white rounded-2xl p-6 shadow-sm mb-6">
             <div className="flex items-start gap-4 mb-4">

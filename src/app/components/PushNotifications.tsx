@@ -2,14 +2,9 @@ import { useState, useEffect } from 'react';
 import { Bell, BellOff, Check, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
-import { projectId } from '/utils/supabase/info';
+import { api } from '../../utils/api';
 
-interface PushNotificationsProps {
-  accessToken: string;
-  userId: string;
-}
-
-export function PushNotifications({ accessToken, userId }: PushNotificationsProps) {
+export function PushNotifications() {
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [isSupported, setIsSupported] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -84,20 +79,7 @@ export function PushNotifications({ accessToken, userId }: PushNotificationsProp
       });
 
       // Send subscription to backend
-      await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-dd7ceef7/notifications/subscribe`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            subscription,
-            userId,
-          }),
-        }
-      );
+      await api.notifications.subscribe(subscription);
 
       setIsSubscribed(true);
     } catch (error) {
@@ -117,17 +99,7 @@ export function PushNotifications({ accessToken, userId }: PushNotificationsProp
         await subscription.unsubscribe();
 
         // Notify backend
-        await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-dd7ceef7/notifications/unsubscribe`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ userId }),
-          }
-        );
+        await api.notifications.unsubscribe();
       }
 
       setIsSubscribed(false);

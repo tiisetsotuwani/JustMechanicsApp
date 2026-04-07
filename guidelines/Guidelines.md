@@ -1,61 +1,47 @@
-**Add your own guidelines here**
-<!--
+# JustMechanicApp — Project Guidelines
 
-System Guidelines
+## General Rules
+- All production screens must load live data through `src/utils/api.ts`. Do not hardcode mock data into frontend components.
+- Every async UI flow must handle loading and error states with clear, user-friendly messaging.
+- Keep modules focused. Extract reusable helpers and UI into separate files before a screen becomes difficult to follow.
+- Use strict TypeScript types from `src/shared/types.ts`. Do not introduce `any`.
+- Persisted user data such as profile, bookings, addresses, and vehicles must be refreshed from the backend on load and after successful mutations.
 
-Use this file to provide the AI with rules and guidelines you want it to follow.
-This template outlines a few examples of things you can add. You can add your own sections and format it to suit your needs
+## Design System
+- Brand primary color is red-700 (`#b91c1c`). Use `bg-red-700`, `text-red-700`, and related shades for primary actions.
+- Prefer Tailwind utility classes. Only use inline styles where a library integration requires them.
+- Use `rounded-xl` or `rounded-2xl` for cards, forms, and buttons.
+- Use the system font stack already provided by the app.
+- Bottom navigation should stay at five items or fewer, with the active state styled using `text-red-700`.
+- Standard cards should follow `bg-white rounded-2xl p-6 shadow-sm`.
+- Customer and provider screens should include `pb-20` so bottom navigation does not overlap content.
 
-TIP: More context isn't always better. It can confuse the LLM. Try and add the most important rules you need
+## Architecture
+- `src/utils/api.ts` is the single frontend API client. Components must not call `fetch` directly.
+- `src/app/App.tsx` owns top-level app state, session restoration, and screen routing.
+- Screen components live in `src/app/components/`.
+- Shared frontend/backend types belong in `src/shared/types.ts`.
+- Supabase Edge Functions live in `supabase/functions/server/`.
 
-# General guidelines
+## Data Flow
+- On session restore or login, fetch the current profile plus any relevant collections such as bookings, addresses, and vehicles.
+- Screens that display mutable backend data should refresh on mount so the UI reflects the latest state.
+- For create, update, and delete actions, call the API first and then sync local state from the successful result when possible.
+- If an API request fails, preserve useful local state where it is safe to do so and show an actionable error message.
 
-Any general rules you want the AI to follow.
-For example:
+## API Integration Rules
+- Every button or quick action shown in production must have a working handler or a clear placeholder message.
+- Booking creation must pass `description` when the user provides it.
+- Tracking, profile, booking, and provider dashboard screens should prefer real backend data and use fallback UI only when the API is unavailable.
+- Keep auth token management centralized through `api.setAuthToken()` and session restoration in `App.tsx`.
 
-* Only use absolute positioning when necessary. Opt for responsive and well structured layouts that use flexbox and grid by default
-* Refactor code as you go to keep code clean
-* Keep file sizes small and put helper functions and components in their own files.
+## Types And Status Values
+- Booking statuses are: `'pending' | 'assigned' | 'en_route' | 'arrived' | 'in_progress' | 'completed' | 'cancelled' | 'disputed'`.
+- User types are: `'customer' | 'provider' | 'admin'`.
+- Provider statuses are: `'pending_review' | 'approved' | 'suspended' | 'rejected'`.
 
---------------
-
-# Design system guidelines
-Rules for how the AI should make generations look like your company's design system
-
-Additionally, if you select a design system to use in the prompt box, you can reference
-your design system's components, tokens, variables and components.
-For example:
-
-* Use a base font-size of 14px
-* Date formats should always be in the format “Jun 10”
-* The bottom toolbar should only ever have a maximum of 4 items
-* Never use the floating action button with the bottom toolbar
-* Chips should always come in sets of 3 or more
-* Don't use a dropdown if there are 2 or fewer options
-
-You can also create sub sections and add more specific details
-For example:
-
-
-## Button
-The Button component is a fundamental interactive element in our design system, designed to trigger actions or navigate
-users through the application. It provides visual feedback and clear affordances to enhance user experience.
-
-### Usage
-Buttons should be used for important actions that users need to take, such as form submissions, confirming choices,
-or initiating processes. They communicate interactivity and should have clear, action-oriented labels.
-
-### Variants
-* Primary Button
-  * Purpose : Used for the main action in a section or page
-  * Visual Style : Bold, filled with the primary brand color
-  * Usage : One primary button per section to guide users toward the most important action
-* Secondary Button
-  * Purpose : Used for alternative or supporting actions
-  * Visual Style : Outlined with the primary color, transparent background
-  * Usage : Can appear alongside a primary button for less important actions
-* Tertiary Button
-  * Purpose : Used for the least important actions
-  * Visual Style : Text-only with no border, using primary color
-  * Usage : For actions that should be available but not emphasized
--->
+## Testing
+- Add or update tests for API helpers and UI flows when behavior changes.
+- Cover customer and provider flows, including error handling paths where practical.
+- Verify file upload flows that update profile images.
+- Run `corepack pnpm test` before wrapping up changes.

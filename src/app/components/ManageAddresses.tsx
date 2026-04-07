@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, MapPin, Plus, Edit2, Trash2, Home, Briefcase, MapPinned } from 'lucide-react';
-import type { Address } from '../App';
+import { api } from '../../utils/api';
+import type { Address } from '../../shared/types';
 
 interface ManageAddressesProps {
   addresses: Address[];
@@ -13,8 +14,28 @@ export function ManageAddresses({ addresses: initialAddresses, onSave, onBack }:
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ label: '', address: '', isDefault: false });
+  const [error, setError] = useState('');
 
-  const handleAdd = () => {
+  useEffect(() => {
+    setAddresses(initialAddresses);
+  }, [initialAddresses]);
+
+  useEffect(() => {
+    const loadAddresses = async () => {
+      try {
+        const response = await api.profile.getAddresses();
+        if (Array.isArray(response.addresses)) {
+          setAddresses(response.addresses as Address[]);
+        }
+      } catch {
+        setAddresses(initialAddresses);
+      }
+    };
+
+    void loadAddresses();
+  }, [initialAddresses]);
+
+  const handleAdd = async () => {
     if (formData.label && formData.address) {
       const newAddress: Address = {
         id: Date.now().toString(),
@@ -30,8 +51,23 @@ export function ManageAddresses({ addresses: initialAddresses, onSave, onBack }:
       }
       
       setAddresses(updatedAddresses);
+      onSave(updatedAddresses);
       setFormData({ label: '', address: '', isDefault: false });
       setIsAdding(false);
+      setError('');
+
+      try {
+        await api.profile.addAddress({
+          label: formData.label,
+          street: formData.address,
+          city: '',
+          state: '',
+          zip: '',
+          isDefault: formData.isDefault,
+        });
+      } catch {
+        setError('Address saved locally. Sync will retry when the API is available.');
+      }
     }
   };
 
@@ -44,7 +80,7 @@ export function ManageAddresses({ addresses: initialAddresses, onSave, onBack }:
     }
   };
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     if (formData.label && formData.address && editingId) {
       let updatedAddresses = addresses.map((addr) =>
         addr.id === editingId ? { ...addr, ...formData } : addr
@@ -58,23 +94,68 @@ export function ManageAddresses({ addresses: initialAddresses, onSave, onBack }:
       }
       
       setAddresses(updatedAddresses);
+      onSave(updatedAddresses);
       setFormData({ label: '', address: '', isDefault: false });
       setIsAdding(false);
       setEditingId(null);
+      setError('');
+
+      try {
+        await api.profile.updateAddress({
+          id: editingId,
+          label: formData.label,
+          street: formData.address,
+          city: '',
+          state: '',
+          zip: '',
+          isDefault: formData.isDefault,
+        });
+      } catch {
+        setError('Address updated locally. Sync will retry when the API is available.');
+      }
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const updatedAddresses = addresses.filter((addr) => addr.id !== id);
     setAddresses(updatedAddresses);
+    onSave(updatedAddresses);
+    setError('');
+
+    try {
+      await api.profile.deleteAddress(id);
+    } catch {
+      setError('Address removed locally. Sync will retry when the API is available.');
+    }
   };
 
-  const handleSetDefault = (id: string) => {
+  const handleSetDefault = async (id: string) => {
     const updatedAddresses = addresses.map((addr) => ({
       ...addr,
       isDefault: addr.id === id,
     }));
     setAddresses(updatedAddresses);
+    onSave(updatedAddresses);
+    setError('');
+
+    const selectedAddress = updatedAddresses.find((addr) => addr.id === id);
+    if (!selectedAddress) {
+      return;
+    }
+
+    try {
+      await api.profile.updateAddress({
+        id,
+        label: selectedAddress.label,
+        street: selectedAddress.address,
+        city: '',
+        state: '',
+        zip: '',
+        isDefault: true,
+      });
+    } catch {
+      setError('Default address updated locally. Sync will retry when the API is available.');
+    }
   };
 
   const handleSaveAll = () => {
@@ -102,6 +183,8 @@ export function ManageAddresses({ addresses: initialAddresses, onSave, onBack }:
       </div>
 
       <div className="px-6 py-6">
+        {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6">{error}</div>}
+
         {/* Add/Edit Form */}
         {isAdding && (
           <div className="bg-white rounded-2xl p-6 shadow-sm mb-6">

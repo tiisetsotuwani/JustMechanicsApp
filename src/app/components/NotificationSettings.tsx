@@ -1,5 +1,6 @@
 import { ArrowLeft, Bell, MessageSquare, Mail, Smartphone } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { api } from '../../utils/api';
 
 interface NotificationSettingsProps {
   onBack: () => void;
@@ -27,16 +28,22 @@ export function NotificationSettings({ onBack }: NotificationSettingsProps) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  // Load settings from localStorage on mount
+  // Load settings from API only
   useEffect(() => {
-    const savedSettings = localStorage.getItem('notification_settings');
-    if (savedSettings) {
+    const load = async () => {
       try {
-        setSettings(JSON.parse(savedSettings));
+        const response = await api.notifications.getPreferences();
+        setSettings((previous) => ({
+          ...previous,
+          ...(response.preferences || {}),
+        }));
       } catch (error) {
         console.error('Error loading notification settings:', error);
+        // Do not fall back to localStorage - use defaults
       }
-    }
+    };
+
+    void load();
   }, []);
 
   const handleToggle = (key: keyof typeof settings) => {
@@ -48,22 +55,8 @@ export function NotificationSettings({ onBack }: NotificationSettingsProps) {
     setMessage('');
     
     try {
-      // Save to localStorage for now
-      localStorage.setItem('notification_settings', JSON.stringify(settings));
-      
-      // TODO: Save to backend when user is authenticated
-      // const token = localStorage.getItem('access_token');
-      // if (token) {
-      //   await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-dd7ceef7/profile/settings`, {
-      //     method: 'PUT',
-      //     headers: {
-      //       'Authorization': `Bearer ${token}`,
-      //       'Content-Type': 'application/json',
-      //     },
-      //     body: JSON.stringify({ notificationSettings: settings }),
-      //   });
-      // }
-      
+      await api.notifications.updatePreferences(settings);
+      // Do not save to localStorage - API is the source of truth
       setMessage('Preferences saved successfully!');
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {

@@ -1,54 +1,158 @@
-import { Bell, Settings, CheckCircle, Clock, DollarSign, Star, TrendingUp, Users, Wrench, MessageCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bell, CheckCircle, Clock, DollarSign, MessageCircle, Settings, Star, Wrench } from 'lucide-react';
+import { api } from '../../utils/api';
+import type { Booking, ProviderStats, Screen } from '../../shared/types';
 
 interface ProviderDashboardProps {
   providerName: string;
-  onNavigate: (screen: string) => void;
+  onNavigate: (screen: Screen) => void;
+  onOpenChat?: (booking: Booking) => void;
 }
 
-export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboardProps) {
-  const stats = [
-    { label: 'Today\'s Jobs', value: '8', icon: Wrench, color: 'bg-blue-100 text-blue-700' },
-    { label: 'Completed', value: '156', icon: CheckCircle, color: 'bg-green-100 text-green-700' },
-    { label: 'Revenue', value: 'R124,500', icon: DollarSign, color: 'bg-red-100 text-red-700' },
-    { label: 'Rating', value: '4.9', icon: Star, color: 'bg-yellow-100 text-yellow-700' },
-  ];
+export function ProviderDashboard({ providerName, onNavigate, onOpenChat }: ProviderDashboardProps) {
+  const [stats, setStats] = useState<ProviderStats | null>(null);
+  const [pendingJobs, setPendingJobs] = useState<Booking[]>([]);
+  const [offers, setOffers] = useState<Array<Record<string, unknown>>>([]);
+  const [isOnline, setIsOnline] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [nowMs, setNowMs] = useState(Date.now());
 
-  const pendingJobs = [
-    {
-      id: '1',
-      customer: 'Sarah Miller',
-      service: 'Oil Change',
-      vehicle: 'Honda Accord 2021',
-      location: '123 Main St, 2.3 miles away',
-      time: '10:30 AM',
-      price: 899,
-      image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
-    },
-    {
-      id: '2',
-      customer: 'John Smith',
-      service: 'Battery Replacement',
-      vehicle: 'Toyota Camry 2020',
-      location: '456 Oak Ave, 1.8 miles away',
-      time: '11:45 AM',
-      price: 1499,
-      image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
-    },
-    {
-      id: '3',
-      customer: 'Emily Johnson',
-      service: 'Tire Service',
-      vehicle: 'Ford F-150 2022',
-      location: '789 Pine Rd, 3.5 miles away',
-      time: '1:00 PM',
-      price: 1999,
-      image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop',
-    },
-  ];
+  const getCurrentPosition = async (): Promise<{ lat: number; lng: number } | null> => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      return null;
+    }
+
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({ lat: position.coords.latitude, lng: position.coords.longitude });
+        },
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 5000 },
+      );
+    });
+  };
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [statsResponse, pendingResponse, profileResponse, offerResponse] = await Promise.all([
+        api.provider.getStats(),
+        api.bookings.getPending(),
+        api.profile.get(),
+        api.bookings.getOffers().catch(() => ({ offers: [] })),
+      ]);
+      setStats(statsResponse.stats);
+      setPendingJobs(pendingResponse.bookings || []);
+      setIsOnline(Boolean(profileResponse.profile?.isOnline));
+      setOffers((offerResponse.offers || []) as Array<Record<string, unknown>>);
+      setError('');
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load provider dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadData();
+  }, [isOnline]);
+
+  useEffect(() => {
+    if (!isOnline || typeof navigator === 'undefined' || !navigator.geolocation) {
+      return;
+    }
+
+    const pushLocation = async () => {
+      navigator.geolocation.getCurrentPosition(async (position) => {
+        try {
+          await api.provider.updateAvailability(
+            true,
+            undefined,
+            {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            },
+          );
+        } catch {
+          // Ignore location refresh failures to avoid interrupting dashboard flow.
+        }
+      });
+    };
+
+    void pushLocation();
+    const interval = window.setInterval(() => {
+      void pushLocation();
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [isOnline]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const refresh = window.setInterval(() => {
+      void loadData();
+    }, 5000);
+    return () => window.clearInterval(refresh);
+  }, []);
+
+  const statCards = useMemo(
+    () => [
+      { label: 'Pending Jobs', value: stats?.pendingJobs ?? 0, icon: Wrench, color: 'bg-blue-100 text-blue-700' },
+      { label: 'Completed', value: stats?.completedJobs ?? 0, icon: CheckCircle, color: 'bg-green-100 text-green-700' },
+      { label: 'Revenue', value: `R${stats?.totalEarnings ?? '0.00'}`, icon: DollarSign, color: 'bg-red-100 text-red-700' },
+      { label: 'Rating', value: stats?.rating?.toFixed(1) ?? '0.0', icon: Star, color: 'bg-yellow-100 text-yellow-700' },
+    ],
+    [stats],
+  );
+
+  const handleAvailabilityToggle = async () => {
+    try {
+      const nextValue = !isOnline;
+      const location = nextValue ? await getCurrentPosition() : null;
+      await api.provider.updateAvailability(nextValue, undefined, location || undefined);
+      setIsOnline(nextValue);
+      if (nextValue) {
+        void api.dispatch.tick().catch(() => undefined);
+      }
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : 'Failed to update availability');
+    }
+  };
+
+  const handleAccept = async (bookingId: string) => {
+    try {
+      await api.bookings.accept(bookingId);
+      await loadData();
+    } catch (acceptError) {
+      setError(acceptError instanceof Error ? acceptError.message : 'Failed to accept booking');
+    }
+  };
+
+  const handleDecline = async (bookingId: string) => {
+    try {
+      await api.bookings.decline(bookingId);
+      await loadData();
+    } catch (declineError) {
+      setError(declineError instanceof Error ? declineError.message : 'Failed to decline booking');
+    }
+  };
+
+  const handleOfferResponse = async (offerId: string, decision: 'accept' | 'decline') => {
+    try {
+      await api.bookings.respondToOffer(offerId, decision);
+      await loadData();
+    } catch (offerError) {
+      setError(offerError instanceof Error ? offerError.message : 'Failed to respond to offer');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-stone-100 pb-20">
-      {/* Header */}
       <div className="bg-gradient-to-r from-red-700 to-red-600 text-white px-6 pt-12 pb-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -61,11 +165,23 @@ export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboar
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <button className="w-10 h-10 flex items-center justify-center relative">
+            <button
+              aria-label="Open notifications"
+              onClick={() => onNavigate('notifications')}
+              className="w-10 h-10 flex items-center justify-center relative"
+            >
               <Bell className="w-6 h-6" />
-              <span className="absolute top-0 right-0 w-3 h-3 bg-yellow-400 rounded-full border-2 border-red-700"></span>
+              {pendingJobs.length + offers.length > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 bg-yellow-400 text-red-900 rounded-full border border-red-700 text-[10px] font-bold flex items-center justify-center">
+                  {pendingJobs.length + offers.length}
+                </span>
+              )}
             </button>
-            <button className="w-10 h-10 flex items-center justify-center">
+            <button
+              aria-label="Open settings"
+              onClick={() => onNavigate('profile')}
+              className="w-10 h-10 flex items-center justify-center"
+            >
               <Settings className="w-6 h-6" />
             </button>
           </div>
@@ -73,149 +189,164 @@ export function ProviderDashboard({ providerName, onNavigate }: ProviderDashboar
       </div>
 
       <div className="px-6 -mt-4">
-        {/* Greeting */}
+        {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 mb-6">{error}</div>}
+
         <div className="mb-6">
           <h2 className="text-2xl text-gray-900 mb-2">Welcome back, {providerName.split(' ')[0]}</h2>
-          <p className="text-gray-600">You have 3 pending service requests</p>
+          <p className="text-gray-600">
+            {loading ? 'Loading jobs...' : `You have ${pendingJobs.length} pending service requests`}
+          </p>
+          <div className="mt-2 inline-flex items-center gap-2 text-sm">
+            <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <span className={isOnline ? 'text-green-700 font-medium' : 'text-gray-600'}>
+              {isOnline ? 'You are online and discoverable' : 'You are offline'}
+            </span>
+          </div>
         </div>
 
-        {/* Stats Grid */}
+        {!loading && offers.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900">Incoming Offers</h3>
+              <span className="text-sm text-red-700 font-medium">{offers.length} Live • Auto-refresh 5s</span>
+            </div>
+            <div className="space-y-3">
+              {offers.map((offer) => (
+                <div key={String(offer.id)} className="bg-white rounded-2xl p-5 shadow-sm border border-red-100">
+                  <p className="font-semibold text-gray-900">{String((offer.booking as Record<string, unknown>)?.service || 'Service Request')}</p>
+                  <p className="text-sm text-gray-600 mt-1">{String((offer.booking as Record<string, unknown>)?.location || '')}</p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Expires in {Math.max(0, Math.floor((new Date(String(offer.expiresAt)).getTime() - nowMs) / 1000))}s
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 mt-4">
+                    <button
+                      onClick={() => void handleOfferResponse(String(offer.id), 'accept')}
+                      className="bg-red-700 text-white py-2.5 rounded-xl font-semibold hover:bg-red-800 transition-colors"
+                    >
+                      Accept Offer
+                    </button>
+                    <button
+                      onClick={() => void handleOfferResponse(String(offer.id), 'decline')}
+                      className="bg-gray-100 text-gray-700 py-2.5 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4 mb-6">
-          {stats.map((stat) => {
+          {statCards.map((stat) => {
             const Icon = stat.icon;
             return (
               <div key={stat.label} className="bg-white rounded-2xl p-6 shadow-sm">
                 <div className={`w-12 h-12 ${stat.color} rounded-full flex items-center justify-center mb-3`}>
                   <Icon className="w-6 h-6" />
                 </div>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                <p className="text-2xl font-bold text-gray-900">{loading ? '--' : stat.value}</p>
                 <p className="text-sm text-gray-600">{stat.label}</p>
               </div>
             );
           })}
         </div>
 
-        {/* Quick Actions */}
         <div className="bg-white rounded-2xl p-6 shadow-sm mb-6">
           <h3 className="font-semibold text-gray-900 mb-4">Quick Actions</h3>
           <div className="grid grid-cols-2 gap-3">
-            <button className="flex items-center justify-center gap-2 py-3 px-4 border-2 border-red-700 text-red-700 rounded-xl hover:bg-red-50 transition-colors">
+            <button
+              onClick={() => void handleAvailabilityToggle()}
+              className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl transition-colors ${
+                isOnline ? 'bg-green-50 text-green-700 border-2 border-green-600' : 'border-2 border-red-700 text-red-700 hover:bg-red-50'
+              }`}
+            >
               <Clock className="w-5 h-5" />
-              <span className="font-medium">Go Online</span>
+              <span className="font-medium">{isOnline ? 'Go Offline' : 'Go Online'}</span>
             </button>
-            <button 
+            <button
               onClick={() => onNavigate('directory')}
               className="flex items-center justify-center gap-2 py-3 px-4 bg-red-700 text-white rounded-xl hover:bg-red-800 transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
               <span className="font-medium">Directory</span>
+            </button>
+            <button
+              onClick={() => onNavigate('provider-crm')}
+              className="flex items-center justify-center gap-2 py-3 px-4 bg-white text-red-700 border-2 border-red-700 rounded-xl hover:bg-red-50 transition-colors"
+            >
+              <span className="font-medium">CRM</span>
+            </button>
+            <button
+              onClick={() => onNavigate('provider-marketing')}
+              className="flex items-center justify-center gap-2 py-3 px-4 bg-white text-red-700 border-2 border-red-700 rounded-xl hover:bg-red-50 transition-colors"
+            >
+              <span className="font-medium">WhatsApp</span>
             </button>
           </div>
         </div>
 
-        {/* Pending Requests */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-900">Pending Requests</h3>
-            <span className="text-sm text-red-700 font-medium">3 New</span>
+            <span className="text-sm text-red-700 font-medium">{pendingJobs.length} New</span>
           </div>
 
           <div className="space-y-4">
             {pendingJobs.map((job) => (
               <div key={job.id} className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-start gap-4 mb-4">
-                  <img
-                    src={job.image}
-                    alt={job.customer}
-                    className="w-12 h-12 rounded-full object-cover"
-                  />
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-gray-900">{job.customer}</h4>
-                    <p className="text-sm text-gray-600">{job.service}</p>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h4 className="font-semibold text-gray-900">{job.service}</h4>
+                    <p className="text-sm text-gray-600">{job.vehicle}</p>
+                    <p className="text-sm text-gray-500 mt-2">{job.location}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-bold text-red-700">R{job.price}</p>
-                    <p className="text-xs text-gray-500">{job.time}</p>
-                  </div>
-                </div>
-
-                <div className="mb-4 pb-4 border-b border-gray-200">
-                  <div className="flex items-start gap-2 text-sm text-gray-600 mb-2">
-                    <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span>{job.vehicle}</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-sm text-gray-600">
-                    <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span>{job.location}</span>
+                    <p className="text-lg font-bold text-red-700">
+                      {job.price ? `R${job.price}` : 'Quote on arrival'}
+                    </p>
+                    <p className="text-xs text-gray-500">{job.createdAt ? new Date(job.createdAt).toLocaleTimeString() : ''}</p>
                   </div>
                 </div>
 
                 <div className="flex gap-3">
-                  <button className="flex-1 bg-red-700 text-white py-3 rounded-xl font-semibold hover:bg-red-800 transition-colors">
+                  <button
+                    onClick={() => void handleAccept(job.id)}
+                    className="flex-1 bg-red-700 text-white py-3 rounded-xl font-semibold hover:bg-red-800 transition-colors"
+                  >
                     Accept
                   </button>
-                  <button className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors">
+                  <button
+                    onClick={() => handleDecline(job.id)}
+                    className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+                  >
                     Decline
                   </button>
+                  {onOpenChat && (
+                    <button
+                      onClick={() => onOpenChat(job)}
+                      className="bg-green-100 text-green-700 px-4 rounded-xl"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-
-        {/* Performance Chart */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">This Week's Performance</h3>
-            <TrendingUp className="w-5 h-5 text-green-600" />
-          </div>
-          <div className="space-y-3">
-            <div>
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-gray-600">Jobs Completed</span>
-                <span className="font-semibold text-gray-900">28/30</span>
+            {!loading && pendingJobs.length === 0 && (
+              <div className="bg-white rounded-2xl p-8 shadow-sm text-center text-gray-500">
+                No pending jobs right now.
               </div>
-              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-full bg-red-700 rounded-full" style={{ width: '93%' }}></div>
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-gray-600">Customer Satisfaction</span>
-                <span className="font-semibold text-gray-900">4.9/5.0</span>
-              </div>
-              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-full bg-green-600 rounded-full" style={{ width: '98%' }}></div>
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-gray-600">Revenue Target</span>
-                <span className="font-semibold text-gray-900">R124,500/R150,000</span>
-              </div>
-              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-600 rounded-full" style={{ width: '83%' }}></div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Floating AI Chat Button */}
       <button
         onClick={() => onNavigate('ai-chat')}
-        className="fixed bottom-24 right-6 w-14 h-14 bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all flex items-center justify-center group animate-bounce"
-        style={{ animationDuration: '3s' }}
+        className="fixed bottom-24 right-6 w-14 h-14 bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all flex items-center justify-center"
       >
         <MessageCircle className="w-7 h-7" />
-        <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></span>
       </button>
     </div>
   );

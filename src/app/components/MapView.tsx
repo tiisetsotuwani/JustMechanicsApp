@@ -1,14 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import '@maplibre/maplibre-gl-leaflet';
 
-// Fix for default marker icons
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+const OPEN_FREE_MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 interface MapViewProps {
   mechanicLocation: [number, number];
@@ -20,31 +17,35 @@ export function MapView({ mechanicLocation, customerLocation, mechanicName }: Ma
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mechanicMarkerRef = useRef<L.Marker | null>(null);
+  const customerMarkerRef = useRef<L.Marker | null>(null);
   const routeLineRef = useRef<L.Polyline | null>(null);
-  const [currentMechanicPosition, setCurrentMechanicPosition] = useState(mechanicLocation);
 
-  // Initialize map
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
+    if (!mapContainerRef.current || mapRef.current) {
+      return;
+    }
 
     const center: [number, number] = [
       (mechanicLocation[0] + customerLocation[0]) / 2,
       (mechanicLocation[1] + customerLocation[1]) / 2,
     ];
 
-    // Create map
     const map = L.map(mapContainerRef.current, {
       center,
       zoom: 13,
       scrollWheelZoom: false,
     });
 
-    // Add tile layer
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map);
+    try {
+      L.maplibreGL({ style: OPEN_FREE_MAP_STYLE_URL }).addTo(map);
+    } catch {
+      // Keep a raster fallback so tracking still works if vector layer setup fails.
+      L.tileLayer(OSM_TILE_URL, {
+        attribution: OSM_ATTRIBUTION,
+        maxZoom: 19,
+      }).addTo(map);
+    }
 
-    // Custom mechanic icon
     const mechanicIcon = L.divIcon({
       html: `<div style="background: #b91717; width: 40px; height: 40px; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="white">
@@ -56,7 +57,6 @@ export function MapView({ mechanicLocation, customerLocation, mechanicName }: Ma
       className: 'mechanic-marker',
     });
 
-    // Custom customer icon
     const customerIcon = L.divIcon({
       html: `<div style="background: #2563eb; width: 40px; height: 40px; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
         <div style="background: white; width: 10px; height: 10px; border-radius: 50%;"></div>
@@ -66,69 +66,45 @@ export function MapView({ mechanicLocation, customerLocation, mechanicName }: Ma
       className: 'customer-marker',
     });
 
-    // Add mechanic marker
-    const mechanicMarker = L.marker(mechanicLocation, { icon: mechanicIcon })
+    mechanicMarkerRef.current = L.marker(mechanicLocation, { icon: mechanicIcon })
       .addTo(map)
-      .bindPopup(`<div style="text-align: center;"><strong>${mechanicName || 'Mechanic'}</strong><br/><span style="color: #666; font-size: 12px;">On the way</span></div>`);
+      .bindPopup(
+        `<div style="text-align: center;"><strong>${mechanicName || 'Mechanic'}</strong><br/><span style="color: #666; font-size: 12px;">Live location</span></div>`,
+      );
 
-    mechanicMarkerRef.current = mechanicMarker;
-
-    // Add customer marker
-    L.marker(customerLocation, { icon: customerIcon })
+    customerMarkerRef.current = L.marker(customerLocation, { icon: customerIcon })
       .addTo(map)
       .bindPopup('<div style="text-align: center;"><strong>Your Location</strong><br/><span style="color: #666; font-size: 12px;">Service destination</span></div>');
 
-    // Add route line
-    const routeLine = L.polyline([mechanicLocation, customerLocation], {
+    routeLineRef.current = L.polyline([mechanicLocation, customerLocation], {
       color: '#b91717',
       weight: 3,
       dashArray: '10, 10',
     }).addTo(map);
 
-    routeLineRef.current = routeLine;
     mapRef.current = map;
 
     return () => {
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [customerLocation, mechanicLocation, mechanicName]);
 
-  // Animate mechanic movement
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentMechanicPosition((prev) => {
-        const latDiff = customerLocation[0] - prev[0];
-        const lngDiff = customerLocation[1] - prev[1];
-        const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+    if (!mapRef.current) {
+      return;
+    }
 
-        // If close enough, stop moving
-        if (distance < 0.001) {
-          return prev;
-        }
+    mechanicMarkerRef.current?.setLatLng(mechanicLocation);
+    mechanicMarkerRef.current?.bindPopup(
+      `<div style="text-align: center;"><strong>${mechanicName || 'Mechanic'}</strong><br/><span style="color: #666; font-size: 12px;">Live location</span></div>`,
+    );
+    customerMarkerRef.current?.setLatLng(customerLocation);
+    routeLineRef.current?.setLatLngs([mechanicLocation, customerLocation]);
 
-        // Move 2% closer each update
-        const newPosition: [number, number] = [
-          prev[0] + latDiff * 0.02,
-          prev[1] + lngDiff * 0.02,
-        ];
-
-        // Update marker position
-        if (mechanicMarkerRef.current) {
-          mechanicMarkerRef.current.setLatLng(newPosition);
-        }
-
-        // Update route line
-        if (routeLineRef.current) {
-          routeLineRef.current.setLatLngs([newPosition, customerLocation]);
-        }
-
-        return newPosition;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [customerLocation]);
+    const bounds = L.latLngBounds([mechanicLocation, customerLocation]).pad(0.2);
+    mapRef.current.fitBounds(bounds, { animate: true, maxZoom: 15 });
+  }, [customerLocation, mechanicLocation, mechanicName]);
 
   return <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />;
 }

@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { ArrowLeft, MapPin, Car, Wrench } from 'lucide-react';
-import type { Booking } from '../App';
+import { api } from '../../utils/api';
+import type { BookingCreateRequest } from '../../shared/types';
 
 interface RequestMechanicProps {
   onBack: () => void;
-  onSubmit: (booking: Booking) => void;
+  onSubmit: (booking: BookingCreateRequest) => Promise<void>;
 }
 
 export function RequestMechanic({ onBack, onSubmit }: RequestMechanicProps) {
@@ -12,6 +13,10 @@ export function RequestMechanic({ onBack, onSubmit }: RequestMechanicProps) {
   const [vehicle, setVehicle] = useState('');
   const [location, setLocation] = useState('');
   const [description, setDescription] = useState('');
+  const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  const [submitting, setSubmitting] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [error, setError] = useState('');
 
   const services = [
     'Oil Change',
@@ -24,17 +29,62 @@ export function RequestMechanic({ onBack, onSubmit }: RequestMechanicProps) {
     'Air Conditioning',
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedService && vehicle && location) {
-      onSubmit({
-        id: '',
-        service: selectedService,
-        vehicle,
-        location,
-        status: 'pending',
-        date: new Date().toISOString(),
-      });
+      try {
+        setSubmitting(true);
+        setError('');
+        await onSubmit({
+          service: selectedService,
+          vehicle,
+          location,
+          description,
+          coordinates,
+        });
+      } catch (submitError) {
+        setError(submitError instanceof Error ? submitError.message : 'Failed to request a mechanic');
+      } finally {
+        setSubmitting(false);
+      }
+    }
+  };
+
+  const handleUseCurrentLocation = async () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setError('Geolocation is not supported on this device.');
+      return;
+    }
+
+    try {
+      setLocating(true);
+      setError('');
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const resolveLocation = async () => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            setCoordinates({ lat, lng });
+            try {
+              const response = await api.maps.reverse(lat, lng);
+              setLocation(String(response.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`));
+            } catch {
+              setLocation(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+            } finally {
+              setLocating(false);
+            }
+          };
+          void resolveLocation();
+        },
+        () => {
+          setError('Unable to get your current location.');
+          setLocating(false);
+        },
+        { enableHighAccuracy: true, timeout: 8000 },
+      );
+    } catch {
+      setError('Unable to get your current location.');
+      setLocating(false);
     }
   };
 
@@ -108,10 +158,11 @@ export function RequestMechanic({ onBack, onSubmit }: RequestMechanicProps) {
             />
             <button
               type="button"
+              onClick={() => void handleUseCurrentLocation()}
               className="text-red-700 text-sm font-medium flex items-center gap-2"
             >
               <MapPin className="w-4 h-4" />
-              Use current location
+              {locating ? 'Locating...' : 'Use current location'}
             </button>
           </div>
 
@@ -130,12 +181,13 @@ export function RequestMechanic({ onBack, onSubmit }: RequestMechanicProps) {
           </div>
 
           {/* Submit Button */}
+          {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4">{error}</div>}
           <button
             type="submit"
-            disabled={!selectedService || !vehicle || !location}
+            disabled={!selectedService || !vehicle || !location || submitting}
             className="w-full bg-red-700 text-white py-4 rounded-xl font-semibold hover:bg-red-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
-            Request Mechanic
+            {submitting ? 'Requesting...' : 'Request Mechanic'}
           </button>
         </form>
 

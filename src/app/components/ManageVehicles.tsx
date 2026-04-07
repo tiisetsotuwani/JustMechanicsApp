@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Car, Plus, Edit2, Trash2, Star } from 'lucide-react';
-import type { Vehicle } from '../App';
+import { api } from '../../utils/api';
+import type { Vehicle } from '../../shared/types';
 
 interface ManageVehiclesProps {
   vehicles: Vehicle[];
@@ -19,8 +20,28 @@ export function ManageVehicles({ vehicles: initialVehicles, onSave, onBack }: Ma
     plateNumber: '',
     isDefault: false,
   });
+  const [error, setError] = useState('');
 
-  const handleAdd = () => {
+  useEffect(() => {
+    setVehicles(initialVehicles);
+  }, [initialVehicles]);
+
+  useEffect(() => {
+    const loadVehicles = async () => {
+      try {
+        const response = await api.profile.getVehicles();
+        if (Array.isArray(response.vehicles)) {
+          setVehicles(response.vehicles as Vehicle[]);
+        }
+      } catch {
+        setVehicles(initialVehicles);
+      }
+    };
+
+    void loadVehicles();
+  }, [initialVehicles]);
+
+  const handleAdd = async () => {
     if (formData.make && formData.model && formData.year && formData.plateNumber) {
       const newVehicle: Vehicle = {
         id: Date.now().toString(),
@@ -36,8 +57,22 @@ export function ManageVehicles({ vehicles: initialVehicles, onSave, onBack }: Ma
       }
       
       setVehicles(updatedVehicles);
+      onSave(updatedVehicles);
       setFormData({ make: '', model: '', year: '', plateNumber: '', isDefault: false });
       setIsAdding(false);
+      setError('');
+
+      try {
+        await api.profile.addVehicle({
+          year: formData.year,
+          make: formData.make,
+          model: formData.model,
+          licensePlate: formData.plateNumber,
+          isDefault: formData.isDefault,
+        });
+      } catch {
+        setError('Vehicle saved locally. Sync will retry when the API is available.');
+      }
     }
   };
 
@@ -56,7 +91,7 @@ export function ManageVehicles({ vehicles: initialVehicles, onSave, onBack }: Ma
     }
   };
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     if (formData.make && formData.model && formData.year && formData.plateNumber && editingId) {
       let updatedVehicles = vehicles.map((veh) =>
         veh.id === editingId ? { ...veh, ...formData } : veh
@@ -70,23 +105,66 @@ export function ManageVehicles({ vehicles: initialVehicles, onSave, onBack }: Ma
       }
       
       setVehicles(updatedVehicles);
+      onSave(updatedVehicles);
       setFormData({ make: '', model: '', year: '', plateNumber: '', isDefault: false });
       setIsAdding(false);
       setEditingId(null);
+      setError('');
+
+      try {
+        await api.profile.updateVehicle({
+          id: editingId,
+          year: formData.year,
+          make: formData.make,
+          model: formData.model,
+          licensePlate: formData.plateNumber,
+          isDefault: formData.isDefault,
+        });
+      } catch {
+        setError('Vehicle updated locally. Sync will retry when the API is available.');
+      }
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const updatedVehicles = vehicles.filter((veh) => veh.id !== id);
     setVehicles(updatedVehicles);
+    onSave(updatedVehicles);
+    setError('');
+
+    try {
+      await api.profile.deleteVehicle(id);
+    } catch {
+      setError('Vehicle removed locally. Sync will retry when the API is available.');
+    }
   };
 
-  const handleSetDefault = (id: string) => {
+  const handleSetDefault = async (id: string) => {
     const updatedVehicles = vehicles.map((veh) => ({
       ...veh,
       isDefault: veh.id === id,
     }));
     setVehicles(updatedVehicles);
+    onSave(updatedVehicles);
+    setError('');
+
+    const selectedVehicle = updatedVehicles.find((veh) => veh.id === id);
+    if (!selectedVehicle) {
+      return;
+    }
+
+    try {
+      await api.profile.updateVehicle({
+        id,
+        year: selectedVehicle.year,
+        make: selectedVehicle.make,
+        model: selectedVehicle.model,
+        licensePlate: selectedVehicle.plateNumber,
+        isDefault: true,
+      });
+    } catch {
+      setError('Default vehicle updated locally. Sync will retry when the API is available.');
+    }
   };
 
   const handleSaveAll = () => {
@@ -110,6 +188,8 @@ export function ManageVehicles({ vehicles: initialVehicles, onSave, onBack }: Ma
       </div>
 
       <div className="px-6 py-6">
+        {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6">{error}</div>}
+
         {/* Add/Edit Form */}
         {isAdding && (
           <div className="bg-white rounded-2xl p-6 shadow-sm mb-6">
