@@ -1,5 +1,7 @@
-import { ArrowLeft, Calendar, Clock, MapPin, ChevronRight } from 'lucide-react';
-import type { Booking } from '../App';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, Calendar, MapPin, ChevronRight } from 'lucide-react';
+import { api } from '../../utils/api';
+import type { Booking } from '../../shared/types';
 
 interface BookingsProps {
   bookings: Booking[];
@@ -8,21 +10,47 @@ interface BookingsProps {
 }
 
 export function Bookings({ bookings, onBack, onViewBooking }: BookingsProps) {
-  const activeBookings = bookings.filter(
+  const [displayBookings, setDisplayBookings] = useState<Booking[]>(bookings);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setDisplayBookings(bookings);
+  }, [bookings]);
+
+  useEffect(() => {
+    const loadBookings = async () => {
+      try {
+        setLoading(true);
+        const response = await api.bookings.getMyBookings();
+        if (Array.isArray(response.bookings)) {
+          setDisplayBookings(response.bookings as Booking[]);
+        }
+      } catch {
+        setDisplayBookings(bookings);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadBookings();
+  }, [bookings]);
+
+  const activeBookings = displayBookings.filter(
     (b) => b.status !== 'completed' && b.status !== 'pending'
   );
-  const pastBookings = bookings.filter((b) => b.status === 'completed');
-  const upcomingBookings = bookings.filter((b) => b.status === 'pending');
+  const pastBookings = displayBookings.filter((b) => b.status === 'completed');
+  const upcomingBookings = displayBookings.filter((b) => b.status === 'pending');
 
   const getStatusColor = (status: Booking['status']) => {
     switch (status) {
       case 'completed':
         return 'bg-green-100 text-green-700';
-      case 'on-the-way':
+      case 'en_route':
+      case 'arrived':
         return 'bg-blue-100 text-blue-700';
-      case 'in-progress':
+      case 'in_progress':
         return 'bg-yellow-100 text-yellow-700';
-      case 'accepted':
+      case 'assigned':
         return 'bg-purple-100 text-purple-700';
       default:
         return 'bg-gray-100 text-gray-700';
@@ -30,7 +58,10 @@ export function Bookings({ bookings, onBack, onViewBooking }: BookingsProps) {
   };
 
   const getStatusText = (status: Booking['status']) => {
-    return status.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    return status
+      .split('_')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   };
 
   return (
@@ -46,6 +77,12 @@ export function Bookings({ bookings, onBack, onViewBooking }: BookingsProps) {
       </div>
 
       <div className="px-6 py-6 space-y-6">
+        {loading && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm text-center text-gray-600">
+            Loading bookings...
+          </div>
+        )}
+
         {/* Active Bookings */}
         {activeBookings.length > 0 && (
           <div>
@@ -170,7 +207,7 @@ export function Bookings({ bookings, onBack, onViewBooking }: BookingsProps) {
         )}
 
         {/* Empty State */}
-        {bookings.length === 0 && (
+        {!loading && displayBookings.length === 0 && (
           <div className="bg-white rounded-2xl p-12 text-center">
             <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No bookings yet</h3>

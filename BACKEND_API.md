@@ -1,709 +1,583 @@
-# JustMechanic Backend API Documentation
+# JustMechanic Backend API
 
 ## Overview
 
-The JustMechanic backend is built using Supabase Edge Functions with Hono framework. It provides comprehensive functionality for authentication, real-time bookings, file storage, and user management.
+- Base path: `/make-server-dd7ceef7`
+- Runtime: Supabase Edge Functions with Hono
+- Data store: KV via `kv_store.tsx`
+- Auth: Supabase Auth bearer token
+- CORS: environment-aware via `ALLOWED_ORIGINS`
+- Logging: structured request logging plus per-domain audit events
 
-**Base URL:** `https://{projectId}.supabase.co/functions/v1/make-server-dd7ceef7`
+All protected routes require:
 
-## Architecture
-
-- **Framework:** Hono (Fast web framework for Edge Functions)
-- **Database:** Supabase KV Store (Key-Value database)
-- **Auth:** Supabase Auth
-- **Storage:** Supabase Storage (Private bucket)
-- **Runtime:** Deno
-
-## Authentication
-
-All protected endpoints require an `Authorization` header:
-```
+```http
 Authorization: Bearer {access_token}
 ```
 
-### Public Endpoints
+## Health
 
-#### 1. Sign Up
-```
-POST /auth/signup
-```
+### `GET /health`
 
-**Body:**
+Returns a simple health response for uptime checks.
+
+## Auth
+
+### `POST /auth/signup`
+
+Create a customer or provider account.
+
+Body:
+
 ```json
 {
   "email": "user@example.com",
   "password": "password123",
-  "name": "John Doe",
-  "userType": "customer", // or "provider"
-  "phone": "555-1234" // optional
+  "name": "Jane Driver",
+  "userType": "customer",
+  "phone": "+27..."
 }
 ```
 
-**Response:**
+### `POST /auth/signin`
+
+Authenticate and return a Supabase session plus profile.
+
+### `GET /auth/session`
+
+Validate the current token and return:
+
 ```json
 {
-  "user": { ...user object },
-  "message": "User created successfully. Please sign in."
+  "user": {},
+  "profile": {}
 }
 ```
 
-#### 2. Sign In
-```
-POST /auth/signin
-```
+### `POST /auth/signout`
 
-**Body:**
+Invalidate the current session token.
+
+## Profile
+
+### `GET /profile`
+
+Return the current user profile.
+
+### `PUT /profile`
+
+Update editable profile fields such as name, phone, and profile image.
+
+## Addresses
+
+### `GET /profile/addresses`
+### `POST /profile/addresses`
+### `PUT /profile/addresses`
+### `DELETE /profile/addresses`
+
+Manage saved customer addresses.
+
+## Vehicles
+
+### `GET /profile/vehicles`
+### `POST /profile/vehicles`
+### `PUT /profile/vehicles`
+### `DELETE /profile/vehicles`
+
+Manage saved customer vehicles.
+
+## Bookings
+
+### `POST /bookings`
+
+Create a booking.
+
+Body:
+
 ```json
 {
-  "email": "user@example.com",
-  "password": "password123"
-}
-```
-
-**Response:**
-```json
-{
-  "session": {
-    "access_token": "...",
-    "refresh_token": "...",
-    ...
-  },
-  "user": { ...user object },
-  "profile": { ...user profile }
-}
-```
-
-#### 3. Get Session
-```
-GET /auth/session
-```
-
-**Headers:** `Authorization: Bearer {access_token}`
-
-**Response:**
-```json
-{
-  "user": { ...user object },
-  "profile": { ...user profile }
-}
-```
-
-#### 4. Sign Out
-```
-POST /auth/signout
-```
-
-**Headers:** `Authorization: Bearer {access_token}`
-
-**Response:**
-```json
-{
-  "message": "Signed out successfully"
-}
-```
-
----
-
-## Profile Management
-
-### Get Profile
-```
-GET /profile
-```
-
-**Response:**
-```json
-{
-  "profile": {
-    "id": "user-id",
-    "email": "user@example.com",
-    "name": "John Doe",
-    "userType": "customer",
-    "phone": "555-1234",
-    "profileImage": "https://...",
-    "rating": 5.0,
-    "createdAt": "2024-01-01T00:00:00Z"
-  }
-}
-```
-
-### Update Profile
-```
-PUT /profile
-```
-
-**Body:**
-```json
-{
-  "name": "Jane Doe",
-  "phone": "555-5678",
-  "profileImage": "https://..."
-}
-```
-
----
-
-## Address Management
-
-### Get All Addresses
-```
-GET /profile/addresses
-```
-
-**Response:**
-```json
-{
-  "addresses": [
-    {
-      "id": "addr:123",
-      "label": "Home",
-      "street": "123 Main St",
-      "city": "New York",
-      "state": "NY",
-      "zip": "10001",
-      "isDefault": true
-    }
-  ]
-}
-```
-
-### Add Address
-```
-POST /profile/addresses
-```
-
-**Body:**
-```json
-{
-  "label": "Work",
-  "street": "456 Office Blvd",
-  "city": "New York",
-  "state": "NY",
-  "zip": "10002",
-  "isDefault": false
-}
-```
-
-### Update Address
-```
-PUT /profile/addresses
-```
-
-**Body:**
-```json
-{
-  "id": "addr:123",
-  "label": "Home Office",
-  "isDefault": true
-}
-```
-
-### Delete Address
-```
-DELETE /profile/addresses
-```
-
-**Body:**
-```json
-{
-  "id": "addr:123"
-}
-```
-
----
-
-## Vehicle Management
-
-### Get All Vehicles
-```
-GET /profile/vehicles
-```
-
-**Response:**
-```json
-{
-  "vehicles": [
-    {
-      "id": "vehicle:123",
-      "year": "2020",
-      "make": "Toyota",
-      "model": "Camry",
-      "color": "Silver",
-      "licensePlate": "ABC123",
-      "vin": "1234567890",
-      "isDefault": true
-    }
-  ]
-}
-```
-
-### Add Vehicle
-```
-POST /profile/vehicles
-```
-
-**Body:**
-```json
-{
-  "year": "2021",
-  "make": "Honda",
-  "model": "Civic",
-  "color": "Blue",
-  "licensePlate": "XYZ789",
-  "vin": "0987654321",
-  "isDefault": false
-}
-```
-
-### Update Vehicle
-```
-PUT /profile/vehicles
-```
-
-**Body:**
-```json
-{
-  "id": "vehicle:123",
-  "color": "Red",
-  "isDefault": true
-}
-```
-
-### Delete Vehicle
-```
-DELETE /profile/vehicles
-```
-
-**Body:**
-```json
-{
-  "id": "vehicle:123"
-}
-```
-
----
-
-## Booking Management
-
-### Create Booking (Customer)
-```
-POST /bookings
-```
-
-**Body:**
-```json
-{
-  "service": "Oil Change",
-  "vehicle": "2020 Toyota Camry",
-  "location": "123 Main St, New York, NY",
-  "description": "Regular oil change needed",
+  "service": "Battery Replacement",
+  "vehicle": "2018 VW Polo",
+  "location": "Rosebank, Johannesburg",
+  "description": "Car will not start",
   "coordinates": {
-    "lat": 40.7580,
-    "lng": -73.9855
+    "lat": -26.145,
+    "lng": 28.041
   }
 }
 ```
 
-**Response:**
+### `GET /bookings`
+
+Return the current user’s bookings.
+
+### `GET /bookings/pending`
+
+Provider-only pending queue for unassigned jobs.
+
+### `GET /bookings/:id`
+
+Return a single booking by KV booking id.
+
+### `POST /bookings/accept`
+
+Provider accepts a pending job.
+
+Body:
+
 ```json
 {
-  "booking": {
-    "id": "booking:123",
-    "customerId": "user-id",
-    "service": "Oil Change",
-    "status": "pending",
-    "createdAt": "2024-01-01T00:00:00Z",
-    ...
-  },
-  "message": "Booking created successfully"
+  "bookingId": "booking:1712345678901:user-id"
 }
 ```
 
-### Get My Bookings
-```
-GET /bookings
-```
+### `PUT /bookings/status`
 
-**Response:**
+Update booking lifecycle status.
+
+Supported statuses:
+
+- `assigned`
+- `en_route`
+- `arrived`
+- `in_progress`
+- `completed`
+- `cancelled`
+- `disputed`
+
+Optional body fields may include `price`.
+
+### `POST /bookings/cancel`
+
+Cancel a booking. Pending queue cleanup is handled on cancel.
+
+### `POST /bookings/rate`
+
+Customer submits a post-completion rating.
+
+Body:
+
 ```json
 {
-  "bookings": [
-    {
-      "id": "booking:123",
-      "service": "Oil Change",
-      "status": "completed",
-      "mechanicName": "John Mechanic",
-      "price": "49.99",
-      ...
-    }
-  ]
+  "bookingId": "booking:...",
+  "rating": 5,
+  "review": "Quick and professional"
 }
 ```
 
-### Get Pending Bookings (Provider Only)
-```
-GET /bookings/pending
-```
+### `POST /bookings/:id/photos`
 
-**Response:**
+Attach a job photo to a booking.
+
+Body:
+
 ```json
 {
-  "bookings": [
-    {
-      "id": "booking:456",
-      "service": "Brake Repair",
-      "status": "pending",
-      "location": "789 Street Ave",
-      ...
-    }
-  ]
+  "photoUrl": "https://...",
+  "type": "before",
+  "caption": "Leaking battery terminal"
 }
 ```
 
-### Accept Booking (Provider Only)
-```
-POST /bookings/accept
-```
+### `GET /bookings/:id/photos`
 
-**Body:**
+Return all saved job photos for a booking.
+
+## Provider
+
+### `PUT /provider/availability`
+
+Update provider online status, service radius, and related availability data.
+
+### `GET /provider/stats`
+
+Return provider dashboard stats.
+
+### `GET /provider/earnings`
+
+Return provider earnings records and totals.
+
+### `PUT /provider/services`
+
+Update provider service offerings.
+
+### `GET /providers/online`
+
+Return currently online providers.
+
+## Onboarding
+
+### `GET /onboarding/status`
+
+Return the current provider onboarding application or `not_started`.
+
+### `POST /onboarding/step`
+
+Persist an onboarding wizard step.
+
+Body:
+
 ```json
 {
-  "bookingId": "booking:456"
-}
-```
-
-**Response:**
-```json
-{
-  "booking": {
-    "id": "booking:456",
-    "status": "assigned",
-    "mechanicId": "provider-id",
-    "mechanicName": "John Mechanic",
-    "estimatedArrival": "15-20 min",
-    ...
-  },
-  "message": "Booking accepted successfully"
-}
-```
-
-### Update Booking Status
-```
-PUT /bookings/status
-```
-
-**Body:**
-```json
-{
-  "bookingId": "booking:456",
-  "status": "in-progress", // or "completed"
-  "price": "149.99" // optional, for completed bookings
-}
-```
-
-### Cancel Booking (Customer Only)
-```
-POST /bookings/cancel
-```
-
-**Body:**
-```json
-{
-  "bookingId": "booking:123"
-}
-```
-
----
-
-## Provider Features
-
-### Update Availability (Online/Offline)
-```
-PUT /provider/availability
-```
-
-**Body:**
-```json
-{
-  "isOnline": true,
-  "serviceRadius": 15 // miles
-}
-```
-
-### Get Provider Stats
-```
-GET /provider/stats
-```
-
-**Response:**
-```json
-{
-  "stats": {
-    "totalJobs": 150,
-    "completedJobs": 145,
-    "rating": 4.8,
-    "totalEarnings": "12345.67",
-    "pendingJobs": 3
+  "step": "services_pricing",
+  "data": {
+    "services": ["battery_replacement", "tire_service"],
+    "hourlyRate": 450
   }
 }
 ```
 
-### Get Earnings
-```
-GET /provider/earnings
-```
+### `POST /onboarding/submit`
 
-**Response:**
+Submit onboarding for approval or auto-approval, depending on qualification path.
+
+### `POST /admin/onboarding/review`
+
+Admin review endpoint for onboarding decisions.
+
+## Chat
+
+### `POST /chat/send`
+
+Send a booking-linked message.
+
+### `GET /chat/:bookingId`
+
+Load chat history for a booking.
+
+### `POST /chat/read`
+
+Mark booking chat messages as read for the current participant.
+
+## Payments
+
+### `POST /payments`
+
+Record a payment ledger entry.
+
+Body:
+
 ```json
 {
-  "earnings": [
+  "bookingId": "booking:...",
+  "method": "cash",
+  "amount": 850
+}
+```
+
+Notes:
+
+- Platform fee is stored at 15%.
+- Cash payments are recorded as `completed`.
+- Other methods start as `pending` until confirmed.
+
+### `GET /payments/booking/:bookingId`
+
+Get the payment record for a booking.
+
+### `GET /payments`
+
+Return the current user’s payment history.
+
+### `POST /payments/confirm`
+
+Confirm a non-cash payment.
+
+## Invoices
+
+### `POST /invoices/generate`
+
+Generate a booking invoice from line items.
+
+Body:
+
+```json
+{
+  "bookingId": "booking:...",
+  "lineItems": [
     {
-      "bookingId": "booking:123",
-      "service": "Oil Change",
-      "date": "2024-01-01T00:00:00Z",
-      "amount": 49.99,
-      "providerEarning": "42.49",
-      "platformFee": "7.50"
-    }
-  ],
-  "totalEarnings": "12345.67",
-  "currency": "USD"
-}
-```
-
-### Update Services Offered
-```
-PUT /provider/services
-```
-
-**Body:**
-```json
-{
-  "services": [
-    "Oil Change",
-    "Brake Repair",
-    "Tire Service",
-    "Engine Diagnostics"
-  ]
-}
-```
-
-### Get Online Providers
-```
-GET /providers/online
-```
-
-**Response:**
-```json
-{
-  "providers": [
-    {
-      "id": "provider-id",
-      "name": "John Mechanic",
-      "rating": 4.8,
-      "completedJobs": 145,
-      "profileImage": "https://..."
-    }
-  ]
-}
-```
-
----
-
-## Storage/File Upload
-
-### Upload File
-```
-POST /storage/upload
-```
-
-**Content-Type:** `multipart/form-data`
-
-**Form Data:**
-- `file`: File object
-- `folder`: Folder name (e.g., "profile", "vehicles", "general")
-
-**Response:**
-```json
-{
-  "path": "user-id/profile/123456.jpg",
-  "url": "https://...signed-url...",
-  "message": "File uploaded successfully"
-}
-```
-
-### Get Signed URL
-```
-POST /storage/url
-```
-
-**Body:**
-```json
-{
-  "path": "user-id/profile/123456.jpg"
-}
-```
-
-**Response:**
-```json
-{
-  "url": "https://...signed-url..."
-}
-```
-
-### Delete File
-```
-DELETE /storage/delete
-```
-
-**Body:**
-```json
-{
-  "path": "user-id/profile/123456.jpg"
-}
-```
-
-### List Files
-```
-GET /storage/list?folder=profile
-```
-
-**Response:**
-```json
-{
-  "files": [
-    {
-      "name": "123456.jpg",
-      "id": "...",
-      "updated_at": "2024-01-01T00:00:00Z",
-      "created_at": "2024-01-01T00:00:00Z",
-      "last_accessed_at": "2024-01-01T00:00:00Z",
-      "metadata": {...}
+      "description": "Battery replacement",
+      "laborCost": 250,
+      "partsCost": 1200,
+      "quantity": 1
     }
   ]
 }
 ```
 
----
+### `GET /invoices/booking/:bookingId`
 
-## Real-Time Tracking
+Return the invoice linked to a booking.
 
-### Get Tracking Data
-```
-GET /tracking/{bookingId}
-```
+### `GET /invoices`
 
-**Response:**
+Return the current user’s invoices.
+
+## Disputes
+
+### `POST /disputes`
+
+Open a dispute for a booking.
+
+Body:
+
 ```json
 {
-  "tracking": {
-    "bookingId": "booking:123",
-    "mechanicLocation": {
-      "lat": 40.7580,
-      "lng": -73.9855
-    },
-    "estimatedArrival": "15-20 min",
-    "status": "assigned",
-    "lastUpdated": "2024-01-01T00:00:00Z"
-  }
+  "bookingId": "booking:...",
+  "type": "quality",
+  "description": "The issue returned the next day",
+  "photos": []
 }
 ```
 
----
+### `GET /disputes`
+
+Return the current user’s disputes.
+
+### `GET /disputes/:id`
+
+Return one dispute by id.
+
+### `POST /disputes/:id/respond`
+
+Append a message to a dispute thread.
+
+### `POST /disputes/:id/resolve`
+
+Admin-only dispute resolution endpoint.
+
+Supported actions:
+
+- `refund_full`
+- `refund_partial`
+- `no_refund`
+- `redo_service`
+
+## Admin
+
+All admin routes require `requireAdmin`.
+
+### `GET /admin/overview`
+
+Returns high-level stats:
+
+- total customers
+- total providers
+- pending bookings
+- active bookings
+- completed bookings
+- online providers
+- total revenue
+
+### `GET /admin/users`
+
+Optional query:
+
+- `type=customer`
+- `type=provider`
+
+### `GET /admin/users/:id`
+
+Return one user profile.
+
+### `GET /admin/users/:id/audit`
+
+Return a user’s audit trail.
+
+### `POST /admin/users/suspend`
+
+Suspend or unsuspend a user.
+
+### `GET /admin/bookings`
+
+Optional query:
+
+- `status=pending`
+- `status=assigned`
+- `status=completed`
+
+### `GET /admin/debug`
+
+Debug lookup for booking and/or user context.
+
+Query params:
+
+- `bookingId`
+- `userId`
+
+Response may include:
+
+- booking
+- payment
+- invoice
+- disputes
+- chat count
+- audits
+- user
+
+### `GET /admin/config/platform`
+### `PUT /admin/config/platform`
+
+Read and update platform-level config such as:
+
+- `promoEnabled`
+- `referralEnabled`
+- `priorityMultiplier`
+- `serviceFeePercent`
+
+### `POST /admin/seed`
+
+Seed the first admin user.
+
+## Storage
+
+### `POST /storage/upload`
+### `POST /storage/url`
+### `DELETE /storage/delete`
+### `GET /storage/list`
+
+Private storage helpers for profile images, documents, and job photos.
+
+## Tracking
+
+### `GET /tracking/:bookingId`
+
+Return the latest tracking snapshot for a booking.
+
+### `POST /tracking/update`
+
+Save the latest provider location/tracking state.
+
+## Notifications
+
+### `POST /notifications/subscribe`
+
+Store the authenticated user's push subscription payload.
+
+### `POST /notifications/unsubscribe`
+
+Remove the authenticated user's push subscription.
+
+### `GET /notifications/preferences`
+
+Return notification preference settings for the current user.
+
+### `PUT /notifications/preferences`
+
+Persist notification preference settings for the current user.
+
+## Maps
+
+### `GET /maps/geocode?q={query}`
+
+Address search using OpenStreetMap Nominatim. No Google Maps API key is required.
+
+Response:
+
+```json
+{
+  "results": [
+    {
+      "displayName": "Sandton, Johannesburg, Gauteng, South Africa",
+      "lat": -26.10757,
+      "lng": 28.0567
+    }
+  ]
+}
+```
+
+### `GET /maps/reverse?lat={lat}&lng={lng}`
+
+Reverse geocode coordinates to an address string.
+
+### `POST /maps/eta`
+
+Compute distance and ETA between two coordinate points.
+
+Body:
+
+```json
+{
+  "from": { "lat": -26.2041, "lng": 28.0473 },
+  "to": { "lat": -26.145, "lng": 28.041 }
+}
+```
+
+Response includes:
+
+- `distanceKm`
+- `durationMin`
+- `source` (`osrm` when routing service is available, otherwise `haversine`)
+
+Notes:
+
+- The app currently uses an OpenStreetMap-based stack instead of Google Maps.
+- Frontend tiles are rendered with Leaflet + OpenFreeMap (`https://tiles.openfreemap.org/styles/liberty`) with an OpenStreetMap raster fallback.
+- Geocoding uses Nominatim and ETA prefers OSRM with a haversine fallback.
+- This avoids paid API keys, but geocoding and ETA still require internet access unless we later self-host or ship offline map data.
 
 ## Analytics
 
-### Get Overview
-```
-GET /analytics/overview
-```
+### `GET /analytics/overview`
 
-**Response:**
+Returns:
+
 ```json
 {
   "analytics": {
-    "totalBookings": 50,
-    "completed": 45,
-    "pending": 2,
-    "cancelled": 3,
+    "totalBookings": 0,
+    "completed": 0,
+    "pending": 0,
+    "cancelled": 0,
     "inProgress": 0
   }
 }
 ```
 
----
+`inProgress` counts bookings in `in_progress`.
 
-## Error Handling
+## Error Shape
 
-All endpoints return errors in this format:
+Errors return:
 
 ```json
 {
-  "error": "Error message description"
+  "error": "Human-readable message"
 }
 ```
 
-**Common Status Codes:**
-- `200` - Success
-- `400` - Bad Request (missing fields, validation errors)
-- `401` - Unauthorized (invalid/missing token)
-- `403` - Forbidden (insufficient permissions)
-- `404` - Not Found
-- `500` - Internal Server Error
+Common status codes:
 
----
+- `200` success
+- `400` bad request
+- `401` unauthorized
+- `403` forbidden
+- `404` not found
+- `429` rate limited
+- `500` server error
 
-## Frontend Usage
+## KV Patterns
 
-Import the API helper:
-
-```typescript
-import { api } from '/src/utils/api';
-
-// Sign in
-const result = await api.auth.signin('user@example.com', 'password');
-
-// Create booking
-const booking = await api.bookings.create({
-  service: 'Oil Change',
-  vehicle: '2020 Toyota Camry',
-  location: '123 Main St',
-});
-
-// Upload profile image
-const fileInput = document.querySelector('input[type="file"]');
-const file = fileInput.files[0];
-const uploadResult = await api.storage.upload(file, 'profile');
-```
-
----
-
-## Database Schema (KV Store)
-
-The backend uses a key-value store with these key patterns:
-
-- `user:{userId}` - User profile
-- `addresses:{userId}` - User's saved addresses (array)
-- `vehicles:{userId}` - User's vehicles (array)
-- `booking:{timestamp}:{userId}` - Booking details
-- `customer:bookings:{userId}` - Customer's booking IDs (array)
-- `provider:bookings:{userId}` - Provider's booking IDs (array)
-- `provider:services:{userId}` - Provider's offered services (array)
-- `provider:availability:{userId}` - Provider's availability settings
-- `bookings:pending` - Queue of pending booking IDs (array)
-
----
+- `user:{userId}`
+- `addresses:{userId}`
+- `vehicles:{userId}`
+- `booking:{timestamp}:{userId}`
+- `customer:bookings:{userId}`
+- `provider:bookings:{userId}`
+- `bookings:pending`
+- `provider:availability:{userId}`
+- `provider:services:{userId}`
+- `chat:{bookingId}`
+- `payment:booking:{bookingId}`
+- `invoice:booking:{bookingId}`
+- `booking:photos:{bookingId}`
+- `dispute:{timestamp}:{bookingId}`
+- `onboarding:{userId}`
+- `audit:{timestamp}:{userId}`
 
 ## Notes
 
-- **Email Confirmation:** Currently disabled (email server not configured). Users are auto-confirmed on signup.
-- **Platform Fee:** Providers receive 85% of payment, platform takes 15%.
-- **File Size Limit:** 5MB per file upload.
-- **Storage:** All files stored in private bucket, accessible via signed URLs only.
-- **Real-time Updates:** Tracking endpoint provides simulated real-time location data.
-
----
-
-## Support
-
-For issues or questions, contact the development team or check the application logs in the Supabase dashboard.
+- The frontend should use `src/utils/api.ts` instead of direct `fetch` calls.
+- Booking statuses are canonicalized in `src/shared/types.ts`.
+- Audit events are stored for auth, bookings, provider operations, onboarding, payments, invoices, disputes, chat, and admin actions.
+- Current payment handling is ledger-first and processor-agnostic so a third-party gateway can be added later without changing route structure.

@@ -1,14 +1,49 @@
+import { useEffect, useState } from 'react';
 import { ArrowLeft, User, MapPin, Car, Bell, CreditCard, Shield, HelpCircle, LogOut, ChevronRight } from 'lucide-react';
-import type { UserProfile } from '../App';
+import { api } from '../../utils/api';
+import type { Screen, UserProfile } from '../../shared/types';
 
 interface ProfileProps {
   userProfile: UserProfile;
   onBack: () => void;
-  onNavigate: (screen: string) => void;
+  onNavigate: (screen: Screen) => void;
   onLogout: () => void;
 }
 
 export function Profile({ userProfile, onBack, onNavigate, onLogout }: ProfileProps) {
+  const isProvider = userProfile.userType === 'provider';
+  const [profileStats, setProfileStats] = useState({
+    services: 12,
+    rating: isProvider ? (userProfile.rating ?? 0) : null,
+    vehicles: 3,
+  });
+
+  useEffect(() => {
+    const loadProfileStats = async () => {
+      try {
+        const [bookingResponse, vehicleResponse] = await Promise.all([
+          api.bookings.getMyBookings(),
+          api.profile.getVehicles(),
+        ]);
+        const bookings = Array.isArray(bookingResponse.bookings) ? bookingResponse.bookings : [];
+        const vehicles = Array.isArray(vehicleResponse.vehicles) ? vehicleResponse.vehicles : [];
+
+        setProfileStats({
+          services: bookings.filter((booking) => booking.status === 'completed').length,
+          rating: isProvider ? (userProfile.rating ?? 0) : null,
+          vehicles: vehicles.length,
+        });
+      } catch {
+        setProfileStats((current) => ({
+          ...current,
+          rating: isProvider ? (userProfile.rating ?? current.rating ?? 0) : null,
+        }));
+      }
+    };
+
+    void loadProfileStats();
+  }, [isProvider, userProfile.rating]);
+
   const profileSections = [
     {
       title: 'Account',
@@ -28,11 +63,32 @@ export function Profile({ userProfile, onBack, onNavigate, onLogout }: ProfilePr
     {
       title: 'Support',
       items: [
+        { icon: Car, label: 'Service History', action: () => onNavigate('service-history') },
+        { icon: Shield, label: 'Disputes', action: () => onNavigate('disputes') },
         { icon: Shield, label: 'Privacy & Security', action: () => onNavigate('privacy') },
         { icon: HelpCircle, label: 'Help Center', action: () => onNavigate('help') },
       ],
     },
   ];
+
+  if (userProfile.userType === 'admin') {
+    profileSections.unshift({
+      title: 'Administration',
+      items: [
+        { icon: Shield, label: 'Admin Dashboard', action: () => onNavigate('admin-dashboard') },
+      ],
+    });
+  }
+
+  if (userProfile.userType === 'provider') {
+    profileSections.unshift({
+      title: 'Provider Tools',
+      items: [
+        { icon: Car, label: 'Provider CRM', action: () => onNavigate('provider-crm') },
+        { icon: Bell, label: 'WhatsApp Marketing', action: () => onNavigate('provider-marketing') },
+      ],
+    });
+  }
 
   return (
     <div className="min-h-screen bg-stone-100 pb-20">
@@ -49,7 +105,11 @@ export function Profile({ userProfile, onBack, onNavigate, onLogout }: ProfilePr
         <div className="bg-white rounded-2xl p-6 shadow-lg mb-6">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-20 h-20 bg-gradient-to-br from-red-700 to-red-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-              {userProfile.name.charAt(0)}
+              {userProfile.profileImage ? (
+                <img src={userProfile.profileImage} alt={userProfile.name} className="w-full h-full rounded-full object-cover" />
+              ) : (
+                userProfile.name.charAt(0)
+              )}
             </div>
             <div className="flex-1">
               <h2 className="text-xl font-semibold text-gray-900">{userProfile.name}</h2>
@@ -63,17 +123,19 @@ export function Profile({ userProfile, onBack, onNavigate, onLogout }: ProfilePr
             </button>
           </div>
           
-          <div className="grid grid-cols-3 gap-4 pt-6 border-t border-gray-200">
+          <div className={`grid ${isProvider ? 'grid-cols-3' : 'grid-cols-2'} gap-4 pt-6 border-t border-gray-200`}>
             <div className="text-center">
-              <p className="text-2xl font-bold text-gray-900">12</p>
+              <p className="text-2xl font-bold text-gray-900">{profileStats.services}</p>
               <p className="text-sm text-gray-600">Services</p>
             </div>
-            <div className="text-center border-x border-gray-200">
-              <p className="text-2xl font-bold text-gray-900">4.9</p>
-              <p className="text-sm text-gray-600">Rating</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-gray-900">3</p>
+            {isProvider && (
+              <div className="text-center border-x border-gray-200">
+                <p className="text-2xl font-bold text-gray-900">{(profileStats.rating ?? 0).toFixed(1)}</p>
+                <p className="text-sm text-gray-600">Rating</p>
+              </div>
+            )}
+            <div className={`text-center ${isProvider ? '' : 'border-l border-gray-200'}`}>
+              <p className="text-2xl font-bold text-gray-900">{profileStats.vehicles}</p>
               <p className="text-sm text-gray-600">Vehicles</p>
             </div>
           </div>

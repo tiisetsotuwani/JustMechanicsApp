@@ -2,23 +2,35 @@ import { Context } from "npm:hono";
 import * as kv from "./kv_store.tsx";
 
 export const providerRoutes = {
+  // Resolve provider type from auth metadata or persisted profile.
+  // OAuth users may not always have userType in metadata initially.
+  getResolvedUserType: async (userId: string, user: Record<string, unknown>) => {
+    const profile = await kv.get(`user:${userId}`);
+    const metadata = (user.user_metadata as Record<string, unknown> | undefined) || {};
+    return profile?.userType || metadata.userType || null;
+  },
+
   // Update provider availability (online/offline)
   updateAvailability: async (c: Context) => {
     try {
       const userId = c.get('userId');
-      const user = c.get('user');
+      const user = c.get('user') as Record<string, unknown>;
+      const resolvedUserType = await providerRoutes.getResolvedUserType(userId, user);
 
-      if (user.user_metadata?.userType !== 'provider') {
+      if (resolvedUserType !== 'provider') {
         return c.json({ error: 'Only providers can update availability' }, 403);
       }
 
       const body = await c.req.json();
-      const { isOnline, serviceRadius } = body;
+      const { isOnline, serviceRadius, lat, lng, activeCapacity } = body;
 
       const availability = await kv.get(`provider:availability:${userId}`) || {};
       
       if (isOnline !== undefined) availability.isOnline = isOnline;
       if (serviceRadius !== undefined) availability.serviceRadius = serviceRadius;
+      if (typeof lat === 'number') availability.lat = lat;
+      if (typeof lng === 'number') availability.lng = lng;
+      if (typeof activeCapacity === 'number' && activeCapacity > 0) availability.activeCapacity = activeCapacity;
       availability.updatedAt = new Date().toISOString();
 
       await kv.set(`provider:availability:${userId}`, availability);
@@ -42,9 +54,10 @@ export const providerRoutes = {
   getStats: async (c: Context) => {
     try {
       const userId = c.get('userId');
-      const user = c.get('user');
+      const user = c.get('user') as Record<string, unknown>;
+      const resolvedUserType = await providerRoutes.getResolvedUserType(userId, user);
 
-      if (user.user_metadata?.userType !== 'provider') {
+      if (resolvedUserType !== 'provider') {
         return c.json({ error: 'Only providers can view stats' }, 403);
       }
 
@@ -76,9 +89,10 @@ export const providerRoutes = {
   getEarnings: async (c: Context) => {
     try {
       const userId = c.get('userId');
-      const user = c.get('user');
+      const user = c.get('user') as Record<string, unknown>;
+      const resolvedUserType = await providerRoutes.getResolvedUserType(userId, user);
 
-      if (user.user_metadata?.userType !== 'provider') {
+      if (resolvedUserType !== 'provider') {
         return c.json({ error: 'Only providers can view earnings' }, 403);
       }
 
@@ -113,9 +127,10 @@ export const providerRoutes = {
   updateServices: async (c: Context) => {
     try {
       const userId = c.get('userId');
-      const user = c.get('user');
+      const user = c.get('user') as Record<string, unknown>;
+      const resolvedUserType = await providerRoutes.getResolvedUserType(userId, user);
 
-      if (user.user_metadata?.userType !== 'provider') {
+      if (resolvedUserType !== 'provider') {
         return c.json({ error: 'Only providers can update services' }, 403);
       }
 

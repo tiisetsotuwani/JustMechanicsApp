@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ArrowLeft, User, Mail, Phone, MapPin, Save } from 'lucide-react';
-import type { UserProfile } from '../App';
+import { api } from '../../utils/api';
+import type { UserProfile } from '../../shared/types';
 
 interface EditPersonalInfoProps {
   userProfile: UserProfile;
@@ -11,16 +12,27 @@ interface EditPersonalInfoProps {
 export function EditPersonalInfo({ userProfile, onSave, onBack }: EditPersonalInfoProps) {
   const [formData, setFormData] = useState<UserProfile>(userProfile);
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    
-    // Simulate save delay
-    setTimeout(() => {
+    setError('');
+
+    try {
+      await api.profile.update({
+        name: formData.name,
+        phone: formData.phone,
+        profileImage: formData.profileImage,
+      });
       onSave(formData);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Failed to save profile changes.');
+    } finally {
       setIsSaving(false);
-    }, 500);
+    }
   };
 
   const handleChange = (field: keyof UserProfile, value: string) => {
@@ -28,6 +40,35 @@ export function EditPersonalInfo({ userProfile, onSave, onBack }: EditPersonalIn
       ...prev,
       [field]: value,
     }));
+  };
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    setError('');
+
+    try {
+      const uploadResult = await api.storage.upload(file, 'profile-images');
+      const profileImage = String(uploadResult.url || uploadResult.path || '');
+
+      if (!profileImage) {
+        throw new Error('Upload did not return an image URL.');
+      }
+
+      await api.profile.update({ profileImage });
+      setFormData((prev) => ({ ...prev, profileImage }));
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload profile photo.');
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      setIsUploadingPhoto(false);
+    }
   };
 
   return (
@@ -44,20 +85,34 @@ export function EditPersonalInfo({ userProfile, onSave, onBack }: EditPersonalIn
 
       <div className="px-6 py-6">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4">{error}</div>}
+
           {/* Profile Picture */}
           <div className="bg-white rounded-2xl p-6 shadow-sm">
             <div className="flex items-center gap-4">
               <div className="w-20 h-20 bg-gradient-to-br from-red-700 to-red-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                {formData.name.charAt(0)}
+                {formData.profileImage ? (
+                  <img src={formData.profileImage} alt={formData.name} className="w-full h-full rounded-full object-cover" />
+                ) : (
+                  formData.name.charAt(0)
+                )}
               </div>
               <div className="flex-1">
                 <p className="font-semibold text-gray-900 mb-1">Profile Picture</p>
                 <button
                   type="button"
+                  onClick={() => fileInputRef.current?.click()}
                   className="text-sm text-red-700 hover:text-red-800 font-medium"
                 >
-                  Change Photo
+                  {isUploadingPhoto ? 'Uploading...' : 'Change Photo'}
                 </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => void handlePhotoChange(e)}
+                />
               </div>
             </div>
           </div>

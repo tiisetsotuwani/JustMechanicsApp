@@ -8,6 +8,7 @@ interface BusinessDirectoryProps {
 export function BusinessDirectory({ onBack }: BusinessDirectoryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
 
   const categories = [
     { id: 'all', name: 'All' },
@@ -97,6 +98,10 @@ export function BusinessDirectory({ onBack }: BusinessDirectoryProps) {
     const matchesCategory = selectedCategory === 'all' || business.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  const selectedBusiness = selectedBusinessId
+    ? businesses.find((business) => business.id === selectedBusinessId) || null
+    : null;
 
   return (
     <div className="min-h-screen bg-stone-100 pb-20">
@@ -214,7 +219,10 @@ export function BusinessDirectory({ onBack }: BusinessDirectoryProps) {
                     <Phone className="w-5 h-5" />
                     Call
                   </a>
-                  <button className="flex-1 flex items-center justify-center gap-2 bg-gray-100 text-gray-900 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors">
+                  <button
+                    onClick={() => setSelectedBusinessId(business.id)}
+                    className="flex-1 flex items-center justify-center gap-2 bg-gray-100 text-gray-900 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+                  >
                     View Details
                     <ChevronRight className="w-5 h-5" />
                   </button>
@@ -233,6 +241,65 @@ export function BusinessDirectory({ onBack }: BusinessDirectoryProps) {
           </div>
         )}
       </div>
+
+      {selectedBusiness && (
+        <div className="fixed inset-0 z-40 bg-black/50 flex items-end" onClick={() => setSelectedBusinessId(null)}>
+          <div
+            className="w-full max-w-md mx-auto bg-white rounded-t-3xl p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-5" />
+            <div className="flex items-start justify-between gap-4 mb-3">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">{selectedBusiness.name}</h3>
+                <p className="text-sm text-gray-500">{selectedBusiness.category.replace('_', ' ')}</p>
+              </div>
+              <span className="text-sm text-gray-600">{selectedBusiness.distance}</span>
+            </div>
+            <div className="flex items-center gap-2 mb-4">
+              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+              <span className="text-sm font-medium text-gray-900">{selectedBusiness.rating}</span>
+              <span className="text-sm text-gray-500">({selectedBusiness.reviews} reviews)</span>
+            </div>
+            <div className="space-y-2 mb-4 text-sm text-gray-600">
+              <p className="flex items-start gap-2">
+                <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>{selectedBusiness.address}</span>
+              </p>
+              <p className="flex items-center gap-2">
+                <Clock className="w-4 h-4 flex-shrink-0" />
+                <span>{selectedBusiness.hours}</span>
+              </p>
+              <p className="flex items-center gap-2">
+                <Phone className="w-4 h-4 flex-shrink-0" />
+                <span>{selectedBusiness.phone}</span>
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-6">
+              {selectedBusiness.services.map((service) => (
+                <span key={service} className="px-3 py-1 bg-red-50 text-red-700 text-xs font-medium rounded-full">
+                  {service}
+                </span>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <a
+                href={`tel:${selectedBusiness.phone}`}
+                className="flex items-center justify-center gap-2 bg-red-700 text-white py-3 rounded-xl font-semibold hover:bg-red-800 transition-colors"
+              >
+                <Phone className="w-5 h-5" />
+                Call Now
+              </a>
+              <button
+                onClick={() => setSelectedBusinessId(null)}
+                className="flex items-center justify-center gap-2 bg-stone-100 text-stone-700 py-3 rounded-xl font-semibold hover:bg-stone-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

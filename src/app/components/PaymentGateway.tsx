@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { CreditCard, Lock, Check, AlertCircle, DollarSign, Wallet } from 'lucide-react';
 import { motion } from 'motion/react';
-import { projectId } from '/utils/supabase/info';
 import { toast } from 'sonner';
+import { api } from '../../utils/api';
+import type { PaymentMethod as ApiPaymentMethod } from '../../shared/types';
 
 interface PaymentGatewayProps {
   bookingId: string;
@@ -10,7 +11,6 @@ interface PaymentGatewayProps {
   description: string;
   onSuccess: (paymentId: string) => void;
   onCancel: () => void;
-  accessToken: string;
 }
 
 interface PaymentMethod {
@@ -29,7 +29,6 @@ export function PaymentGateway({
   description,
   onSuccess,
   onCancel,
-  accessToken,
 }: PaymentGatewayProps) {
   const [step, setStep] = useState<'select' | 'process' | 'success' | 'error'>('select');
   const [selectedMethod, setSelectedMethod] = useState<'card' | 'eft' | 'wallet' | null>(null);
@@ -48,38 +47,16 @@ export function PaymentGateway({
   useEffect(() => {
     const loadPaymentMethods = async () => {
       try {
-        const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-dd7ceef7/payment/methods`,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-            }
-          }
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-          setSavedMethods(data.methods || []);
-        }
+        // Placeholder until card vaulting is added.
+        setSavedMethods([]);
       } catch (error) {
-        console.log('Using demo payment methods:', error);
-        // Demo saved cards
-        setSavedMethods([
-          {
-            id: '1',
-            type: 'card',
-            last4: '4242',
-            brand: 'Visa',
-            expiryMonth: '12',
-            expiryYear: '2025',
-            isDefault: true,
-          },
-        ]);
+        console.error('Error loading payment methods:', error);
+        setSavedMethods([]);
       }
     };
 
     loadPaymentMethods();
-  }, [accessToken]);
+  }, []);
 
   const formatCardNumber = (value: string) => {
     const cleaned = value.replace(/\s/g, '');
@@ -119,6 +96,7 @@ export function PaymentGateway({
   const processPayment = async () => {
     setProcessing(true);
     setStep('process');
+    setErrorMessage('');
 
     try {
       // Validate card details if new card
@@ -134,62 +112,56 @@ export function PaymentGateway({
         }
       }
 
-      // Call Payfast API via backend
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-dd7ceef7/payment/process`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            bookingId,
-            amount,
-            paymentMethod: selectedMethod,
-            cardDetails: selectedMethod === 'card' ? {
-              number: cardNumber,
-              name: cardName,
-              expiry: expiryDate,
-              cvv: cvv,
-              save: saveCard,
-            } : null,
-          }),
-        }
-      );
+      const selected = selectedMethod || 'card';
+      const mappedMethod: ApiPaymentMethod =
+        selected === 'wallet'
+          ? 'card'
+          : selected;
+      const response = await api.payments.record(bookingId, mappedMethod, amount);
+      const payment = response.payment as { id?: string } | undefined;
 
-      const data = await response.json();
-
-      if (response.ok) {
-        // Payment successful
-        setStep('success');
-        setTimeout(() => {
-          onSuccess(data.paymentId);
-        }, 2000);
-      } else {
-        throw new Error(data.error || 'Payment failed');
-      }
-    } catch (error: any) {
-      console.log('Payment processing error, using demo mode:', error);
-      
-      // Demo mode - simulate successful payment
-      setStep('process');
+      setStep('success');
       setTimeout(() => {
-        setStep('success');
-        setTimeout(() => {
-          onSuccess(`DEMO_${Date.now()}`);
-        }, 2000);
+        onSuccess(payment?.id || `payment:${Date.now()}`);
       }, 2000);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Payment failed';
+      setErrorMessage(message);
+      setStep('error');
+      toast.error(message);
     } finally {
       setProcessing(false);
     }
   };
+
+  const renderError = () => (
+    <div className="text-center py-8">
+      <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <AlertCircle className="w-8 h-8 text-red-600" />
+      </div>
+      <h3 className="text-xl font-semibold text-gray-900 mb-2">Payment Failed</h3>
+      <p className="text-gray-600 mb-4">{errorMessage || 'Unable to process payment right now.'}</p>
+      <button
+        onClick={() => setStep('select')}
+        className="w-full bg-red-700 text-white py-3 rounded-xl font-semibold hover:bg-red-800 transition-colors"
+      >
+        Try Again
+      </button>
+      <button
+        onClick={onCancel}
+        className="w-full text-gray-600 py-3 rounded-xl font-medium hover:bg-gray-100 transition-colors mt-2"
+      >
+        Cancel
+      </button>
+    </div>
+  );
 
   const renderSelectMethod = () => (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment</h2>
         <p className="text-gray-600">Complete your payment for {description}</p>
+      }
       </div>
 
       {/* Amount Display */}
@@ -443,6 +415,7 @@ export function PaymentGateway({
       {step === 'select' && renderSelectMethod()}
       {step === 'process' && renderProcessing()}
       {step === 'success' && renderSuccess()}
+      {step === 'error' && renderError()}
     </div>
   );
 }

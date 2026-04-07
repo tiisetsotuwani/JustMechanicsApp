@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { SplashScreen } from './components/SplashScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { CustomerDashboard } from './components/CustomerDashboard';
@@ -18,194 +18,276 @@ import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { HelpCenter } from './components/HelpCenter';
 import { NotificationSettings } from './components/NotificationSettings';
 import { PaymentMethods } from './components/PaymentMethods';
-import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { AdminDashboard } from './components/AdminDashboard';
+import { Chat } from './components/Chat';
+import { RatingModal } from './components/RatingModal';
+import { ProviderOnboarding } from './components/onboarding/ProviderOnboarding';
+import { JobDocumentation } from './components/JobDocumentation';
+import { Invoice } from './components/Invoice';
+import { ServiceHistory } from './components/ServiceHistory';
+import { Disputes } from './components/Disputes';
+import { ProviderCRM } from './components/ProviderCRM';
+import { ProviderMarketing } from './components/ProviderMarketing';
+import { api } from '../utils/api';
+import type {
+  Address,
+  Booking,
+  BookingCreateRequest,
+  Invoice as InvoiceType,
+  Screen,
+  UserProfile,
+  UserType,
+  Vehicle,
+} from '../shared/types';
 
-type Screen = 'splash' | 'login' | 'customer-dashboard' | 'provider-dashboard' | 'request' | 'track' | 'services' | 'payments' | 'bookings' | 'profile' | 'directory' | 'edit-info' | 'addresses' | 'vehicles' | 'ai-chat' | 'privacy' | 'help' | 'notifications' | 'payment-methods';
-type UserType = null | 'customer' | 'provider';
-
-export interface Booking {
-  id: string;
-  service: string;
-  vehicle: string;
-  status: 'pending' | 'accepted' | 'on-the-way' | 'in-progress' | 'completed';
-  mechanicName?: string;
-  mechanicImage?: string;
-  estimatedArrival?: string;
-  price?: number;
-  location?: string;
-  date: string;
-}
-
-export interface UserProfile {
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-}
-
-export interface Address {
-  id: string;
-  label: string;
-  address: string;
-  isDefault: boolean;
-}
-
-export interface Vehicle {
-  id: string;
-  make: string;
-  model: string;
-  year: string;
-  plateNumber: string;
-  isDefault: boolean;
-}
+const EMPTY_PROFILE: UserProfile = {
+  name: '',
+  email: '',
+  phone: '',
+  address: '',
+};
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('splash');
   const [userType, setUserType] = useState<UserType>(null);
+  const [currentUserId, setCurrentUserId] = useState('');
   const [activeBooking, setActiveBooking] = useState<Booking | null>(null);
+  const [pendingBooking, setPendingBooking] = useState<Booking | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceType | null>(null);
+  const [showRatingForBooking, setShowRatingForBooking] = useState<string | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [userProfile, setUserProfile] = useState<UserProfile>({
-    name: 'John Doe',
-    email: 'john@example.com',
-    phone: '+1 (555) 123-4567',
-    address: '123 Main St, City, State 12345',
-  });
-  const [addresses, setAddresses] = useState<Address[]>([
-    { id: '1', label: 'Home', address: '123 Main St, City, State 12345', isDefault: true },
-    { id: '2', label: 'Work', address: '456 Office Blvd, City, State 12345', isDefault: false },
-  ]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([
-    { id: '1', make: 'Toyota', model: 'Camry', year: '2020', plateNumber: 'ABC123', isDefault: true },
-    { id: '2', make: 'Honda', model: 'Civic', year: '2019', plateNumber: 'XYZ789', isDefault: false },
-  ]);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [userProfile, setUserProfile] = useState<UserProfile>(EMPTY_PROFILE);
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
 
-  // Check for existing session on app load
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const storedToken = localStorage.getItem('access_token');
-        const storedUserType = localStorage.getItem('user_type') as UserType;
-        
-        if (storedToken && storedUserType) {
-          // Verify token with backend
-          const response = await fetch(
-            `https://${projectId}.supabase.co/functions/v1/make-server-dd7ceef7/auth/session`,
-            {
-              headers: {
-                'Authorization': `Bearer ${storedToken}`,
-              }
-            }
-          );
-
-          if (response.ok) {
-            const data = await response.json();
-            setAccessToken(storedToken);
-            setUserType(storedUserType);
-            
-            // Load user profile
-            if (data.profile) {
-              setUserProfile({
-                name: data.profile.name || 'User',
-                email: data.profile.email || '',
-                phone: data.profile.phone || '',
-                address: data.profile.address || '',
-              });
-            }
-            
-            // Skip splash and go to dashboard
-            setCurrentScreen(storedUserType === 'customer' ? 'customer-dashboard' : 'provider-dashboard');
-            setIsCheckingSession(false);
-            return;
-          } else {
-            // Invalid token, clear storage
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('user_type');
-          }
-        }
-      } catch (error) {
-        console.error('Session check error:', error);
-      }
-      
-      setIsCheckingSession(false);
-      
-      // Show splash screen for new users
-      const timer = setTimeout(() => {
-        setCurrentScreen('login');
-      }, 2500);
-      
-      return () => clearTimeout(timer);
+    const handleUnauthorized = () => {
+      api.setAuthToken(null);
+      setUserType(null);
+      setCurrentUserId('');
+      setCurrentScreen('login');
+      setBookings([]);
+      setActiveBooking(null);
+      setPendingBooking(null);
+      setUserProfile(EMPTY_PROFILE);
+      setAddresses([]);
+      setVehicles([]);
+      setSelectedInvoice(null);
+      setShowRatingForBooking(null);
     };
 
-    checkSession();
+    window.addEventListener('justmechanic:unauthorized', handleUnauthorized);
+    return () => {
+      window.removeEventListener('justmechanic:unauthorized', handleUnauthorized);
+    };
+  }, []);
+
+  const refreshBookings = async () => {
+    try {
+      const response = await api.bookings.getMyBookings();
+      const nextBookings = response.bookings || [];
+      setBookings(nextBookings);
+      const active = nextBookings.find((booking: Booking) =>
+        ['assigned', 'en_route', 'arrived', 'in_progress'].includes(booking.status),
+      ) || null;
+      const pending = nextBookings.find((booking: Booking) => booking.status === 'pending') || null;
+      setActiveBooking(active);
+      setPendingBooking(pending);
+      const unratedCompleted = nextBookings.find((booking: Booking) => booking.status === 'completed' && !booking.rated);
+      setShowRatingForBooking(unratedCompleted?.id || null);
+    } catch {
+      setBookings([]);
+      setActiveBooking(null);
+      setPendingBooking(null);
+    }
+  };
+
+  const loadProfileCollections = async () => {
+    try {
+      const [addressResponse, vehicleResponse] = await Promise.all([
+        api.profile.getAddresses(),
+        api.profile.getVehicles(),
+      ]);
+      setAddresses(addressResponse.addresses || []);
+      setVehicles(vehicleResponse.vehicles || []);
+    } catch {
+      setAddresses([]);
+      setVehicles([]);
+    }
+  };
+
+  const routeForProfile = async (profile: Partial<UserProfile> | null, fallbackType: UserType) => {
+    const resolvedUserType = profile?.userType || fallbackType;
+    if (resolvedUserType === 'admin') {
+      setCurrentScreen('admin-dashboard');
+      return;
+    }
+    if (resolvedUserType === 'provider') {
+      try {
+        const onboardingResponse = await api.onboarding.getStatus();
+        if (onboardingResponse.onboarding?.status !== 'approved') {
+          setCurrentScreen('provider-onboarding');
+          return;
+        }
+      } catch {
+        setCurrentScreen('provider-onboarding');
+        return;
+      }
+      setCurrentScreen('provider-dashboard');
+      return;
+    }
+
+    setCurrentScreen('customer-dashboard');
+  };
+
+  useEffect(() => {
+    let timer: number | undefined;
+
+    const restoreSession = async () => {
+      const token = api.getAuthToken();
+      if (!token) {
+        timer = window.setTimeout(() => setCurrentScreen('login'), 1500);
+        return;
+      }
+
+      try {
+        const { user, profile } = await api.auth.getSession();
+        setCurrentUserId(user?.id || '');
+        setUserType((profile?.userType as UserType) || null);
+        setUserProfile({
+          ...EMPTY_PROFILE,
+          ...profile,
+        });
+        await Promise.all([refreshBookings(), loadProfileCollections()]);
+        await routeForProfile(profile, profile?.userType as UserType);
+      } catch {
+        api.setAuthToken(null);
+        setCurrentScreen('login');
+      }
+    };
+
+    void restoreSession();
+    return () => {
+      if (timer) {
+        window.clearTimeout(timer);
+      }
+    };
   }, []);
 
   useEffect(() => {
-    // Load mock booking data
-    const mockBookings: Booking[] = [
-      {
-        id: '1',
-        service: 'Oil Change',
-        vehicle: 'Toyota',
-        status: 'on-the-way',
-        mechanicName: 'Mike Johnson',
-        mechanicImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
-        estimatedArrival: '15 mins',
-        price: 899.99,
-        location: 'Your Location',
-        date: new Date().toISOString(),
-      },
-    ];
-    setBookings(mockBookings);
-    setActiveBooking(mockBookings[0]);
-  }, []);
+    const loadInvoice = async () => {
+      if (currentScreen !== 'invoice' || !activeBooking) {
+        return;
+      }
 
-  const handleLogin = (type: 'customer' | 'provider', token: string, profile: any) => {
+      try {
+        const response = await api.invoices.getForBooking(activeBooking.id);
+        setSelectedInvoice(response.invoice || null);
+      } catch {
+        setSelectedInvoice(null);
+      }
+    };
+
+    void loadInvoice();
+  }, [activeBooking, currentScreen]);
+
+  const handleLogin = async (
+    type: 'customer' | 'provider',
+    token: string,
+    profile: Partial<UserProfile> | null,
+    rememberMe = true,
+  ) => {
+    api.setAuthToken(token);
     setUserType(type);
-    setAccessToken(token);
-    
-    // Save to localStorage for persistence
-    localStorage.setItem('access_token', token);
-    localStorage.setItem('user_type', type);
-    
-    // Update user profile
-    if (profile) {
+    setUserProfile({
+      ...EMPTY_PROFILE,
+      ...profile,
+    });
+
+    try {
+      const session = await api.auth.getSession();
+      setCurrentUserId(session.user?.id || '');
       setUserProfile({
-        name: profile.name || 'User',
-        email: profile.email || '',
-        phone: profile.phone || '',
-        address: profile.address || '',
+        ...EMPTY_PROFILE,
+        ...session.profile,
       });
-    }
-    
-    if (type === 'customer') {
-      setCurrentScreen('customer-dashboard');
-    } else {
-      setCurrentScreen('provider-dashboard');
+      setUserType((session.profile?.userType as UserType) || type);
+      await Promise.all([refreshBookings(), loadProfileCollections()]);
+      if (!rememberMe) {
+        window.localStorage.removeItem('access_token');
+      }
+      await routeForProfile(session.profile, (session.profile?.userType as UserType) || type);
+    } catch {
+      const isDemoLogin = token.startsWith('demo_');
+      if (!isDemoLogin) {
+        api.setAuthToken(null);
+        if (!rememberMe) {
+          window.localStorage.removeItem('access_token');
+        }
+        setUserType(null);
+        setCurrentUserId('');
+        setCurrentScreen('login');
+        setBookings([]);
+        setActiveBooking(null);
+        setPendingBooking(null);
+        setUserProfile(EMPTY_PROFILE);
+        setAddresses([]);
+        setVehicles([]);
+        setSelectedInvoice(null);
+        setShowRatingForBooking(null);
+        return;
+      }
+
+      if (!rememberMe) {
+        window.localStorage.removeItem('access_token');
+      }
+      await routeForProfile(profile, type);
     }
   };
 
-  const handleLogout = () => {
-    // Clear local storage
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user_type');
-    
+  const handleLogout = async () => {
+    try {
+      await api.auth.signout();
+    } catch {
+      api.setAuthToken(null);
+    }
+
     setUserType(null);
-    setAccessToken(null);
-    setCurrentScreen('splash');
-    
-    // Reset to login after splash animation
-    setTimeout(() => {
-      setCurrentScreen('login');
-    }, 2500);
+    setCurrentUserId('');
+    setCurrentScreen('login');
+    setBookings([]);
+    setActiveBooking(null);
+    setPendingBooking(null);
+    setUserProfile(EMPTY_PROFILE);
+    setAddresses([]);
+    setVehicles([]);
+    setSelectedInvoice(null);
+    setShowRatingForBooking(null);
   };
 
-  const handleCreateBooking = (booking: Booking) => {
-    const newBooking = { ...booking, id: Date.now().toString(), date: new Date().toISOString() };
-    setBookings([newBooking, ...bookings]);
-    setActiveBooking(newBooking);
-    setCurrentScreen('customer-dashboard');
+  const handleCreateBooking = async (bookingRequest: BookingCreateRequest) => {
+    try {
+      const response = await api.bookings.create(bookingRequest);
+      await refreshBookings();
+      setPendingBooking(response.booking);
+      setActiveBooking(null);
+      setCurrentScreen('customer-dashboard');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Create booking failed';
+      throw new Error(message);
+    }
+  };
+
+  const dashboardScreen =
+    userType === 'admin'
+      ? 'admin-dashboard'
+      : userType === 'customer'
+        ? 'customer-dashboard'
+        : 'provider-dashboard';
+
+  const openChatForBooking = (booking: Booking) => {
+    setActiveBooking(booking);
+    setCurrentScreen('chat');
   };
 
   const renderScreen = () => {
@@ -217,48 +299,34 @@ function App() {
       case 'customer-dashboard':
         return (
           <CustomerDashboard
-            userName={userProfile.name.split(' ')[0]}
+            userName={userProfile.name.split(' ')[0] || 'Customer'}
             activeBooking={activeBooking}
+            pendingBooking={pendingBooking}
             onNavigate={setCurrentScreen}
           />
         );
       case 'provider-dashboard':
-        return (
-          <ProviderDashboard
-            providerName={userProfile.name}
-            onNavigate={setCurrentScreen}
-          />
-        );
+        return <ProviderDashboard providerName={userProfile.name || 'Provider'} onNavigate={setCurrentScreen} onOpenChat={openChatForBooking} />;
+      case 'provider-crm':
+        return <ProviderCRM onBack={() => setCurrentScreen('provider-dashboard')} />;
+      case 'provider-marketing':
+        return <ProviderMarketing onBack={() => setCurrentScreen('provider-dashboard')} />;
+      case 'admin-dashboard':
+        return <AdminDashboard onBack={() => setCurrentScreen('profile')} />;
+      case 'provider-onboarding':
+        return <ProviderOnboarding onBack={handleLogout} onComplete={() => setCurrentScreen('provider-dashboard')} />;
       case 'request':
-        return (
-          <RequestMechanic
-            onBack={() => setCurrentScreen('customer-dashboard')}
-            onSubmit={handleCreateBooking}
-          />
-        );
+        return <RequestMechanic onBack={() => setCurrentScreen('customer-dashboard')} onSubmit={handleCreateBooking} />;
       case 'track':
-        return (
-          <TrackMechanic
-            booking={activeBooking}
-            onBack={() => setCurrentScreen('customer-dashboard')}
-          />
-        );
+        return <TrackMechanic booking={activeBooking} onBack={() => setCurrentScreen('customer-dashboard')} onOpenChat={() => setCurrentScreen('chat')} />;
+      case 'chat':
+        return activeBooking ? (
+          <Chat bookingId={activeBooking.id} currentUserId={currentUserId} onBack={() => setCurrentScreen(dashboardScreen)} />
+        ) : null;
       case 'services':
-        return (
-          <Services
-            onBack={() => setCurrentScreen('customer-dashboard')}
-            onRequestService={(service) => {
-              setCurrentScreen('request');
-            }}
-          />
-        );
+        return <Services onBack={() => setCurrentScreen('customer-dashboard')} onRequestService={() => setCurrentScreen('request')} />;
       case 'payments':
-        return (
-          <Payments
-            bookings={bookings}
-            onBack={() => setCurrentScreen('customer-dashboard')}
-          />
-        );
+        return <Payments bookings={bookings} userType={userType} onBack={() => setCurrentScreen(dashboardScreen)} />;
       case 'bookings':
         return (
           <Bookings
@@ -270,21 +338,34 @@ function App() {
             }}
           />
         );
+      case 'service-history':
+        return (
+          <ServiceHistory
+            onBack={() => setCurrentScreen('profile')}
+            onOpenInvoice={(booking) => {
+              setActiveBooking(booking);
+              setCurrentScreen('invoice');
+            }}
+            onOpenDocumentation={(booking) => {
+              setActiveBooking(booking);
+              setCurrentScreen('job-documentation');
+            }}
+            onOpenDisputes={(booking) => {
+              setActiveBooking(booking);
+              setCurrentScreen('disputes');
+            }}
+          />
+        );
+      case 'invoice':
+        return <Invoice invoice={selectedInvoice} onBack={() => setCurrentScreen('service-history')} />;
+      case 'job-documentation':
+        return activeBooking ? <JobDocumentation bookingId={activeBooking.id} onBack={() => setCurrentScreen(dashboardScreen)} /> : null;
+      case 'disputes':
+        return <Disputes booking={activeBooking} onBack={() => setCurrentScreen('profile')} />;
       case 'directory':
-        return (
-          <BusinessDirectory
-            onBack={() => userType === 'customer' ? setCurrentScreen('customer-dashboard') : setCurrentScreen('provider-dashboard')}
-          />
-        );
+        return <BusinessDirectory onBack={() => setCurrentScreen(dashboardScreen)} />;
       case 'profile':
-        return (
-          <Profile
-            userProfile={userProfile}
-            onBack={() => userType === 'customer' ? setCurrentScreen('customer-dashboard') : setCurrentScreen('provider-dashboard')}
-            onNavigate={setCurrentScreen}
-            onLogout={handleLogout}
-          />
-        );
+        return <Profile userProfile={userProfile} onBack={() => setCurrentScreen(dashboardScreen)} onNavigate={setCurrentScreen} onLogout={handleLogout} />;
       case 'edit-info':
         return (
           <EditPersonalInfo
@@ -297,131 +378,87 @@ function App() {
           />
         );
       case 'addresses':
-        return (
-          <ManageAddresses
-            addresses={addresses}
-            onSave={setAddresses}
-            onBack={() => setCurrentScreen('profile')}
-          />
-        );
+        return <ManageAddresses addresses={addresses} onSave={setAddresses} onBack={() => setCurrentScreen('profile')} />;
       case 'vehicles':
-        return (
-          <ManageVehicles
-            vehicles={vehicles}
-            onSave={setVehicles}
-            onBack={() => setCurrentScreen('profile')}
-          />
-        );
+        return <ManageVehicles vehicles={vehicles} onSave={setVehicles} onBack={() => setCurrentScreen('profile')} />;
       case 'ai-chat':
-        return (
-          <AIChatBot
-            onBack={() => userType === 'customer' ? setCurrentScreen('customer-dashboard') : setCurrentScreen('provider-dashboard')}
-            userType={userType || 'customer'}
-          />
-        );
+        return <AIChatBot onBack={() => setCurrentScreen(dashboardScreen)} userType={userType || 'customer'} />;
       case 'privacy':
-        return (
-          <PrivacyPolicy
-            onBack={() => setCurrentScreen('profile')}
-          />
-        );
+        return <PrivacyPolicy onBack={() => setCurrentScreen('profile')} />;
       case 'help':
-        return (
-          <HelpCenter
-            onBack={() => setCurrentScreen('profile')}
-          />
-        );
+        return <HelpCenter onBack={() => setCurrentScreen('profile')} onNavigate={setCurrentScreen} />;
       case 'notifications':
-        return (
-          <NotificationSettings
-            onBack={() => setCurrentScreen('profile')}
-          />
-        );
+        return <NotificationSettings onBack={() => setCurrentScreen('profile')} />;
       case 'payment-methods':
-        return (
-          <PaymentMethods
-            onBack={() => setCurrentScreen('profile')}
-          />
-        );
+        return <PaymentMethods onBack={() => setCurrentScreen('profile')} />;
       default:
-        return userType === 'customer' ? (
-          <CustomerDashboard userName={userProfile.name.split(' ')[0]} activeBooking={activeBooking} onNavigate={setCurrentScreen} />
-        ) : (
-          <ProviderDashboard providerName={userProfile.name} onNavigate={setCurrentScreen} />
+        return (
+          <CustomerDashboard
+            userName={userProfile.name.split(' ')[0] || 'Customer'}
+            activeBooking={activeBooking}
+            pendingBooking={pendingBooking}
+            onNavigate={setCurrentScreen}
+          />
         );
     }
   };
 
-  const dashboardScreen = userType === 'customer' ? 'customer-dashboard' : 'provider-dashboard';
-
   return (
     <div className="min-h-screen bg-stone-100">
       {renderScreen()}
-      
-      {/* Bottom Navigation - Show on all screens except splash and login */}
-      {currentScreen !== 'splash' && currentScreen !== 'login' && userType && (
+
+      {showRatingForBooking && (
+        <RatingModal
+          bookingId={showRatingForBooking}
+          onClose={() => setShowRatingForBooking(null)}
+          onSubmitted={() => {
+            setShowRatingForBooking(null);
+            void refreshBookings();
+          }}
+        />
+      )}
+
+      {currentScreen !== 'splash' && currentScreen !== 'login' && currentScreen !== 'provider-onboarding' && userType && (
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 px-4 py-3 flex justify-around items-center max-w-md mx-auto">
           <button
             onClick={() => setCurrentScreen(dashboardScreen)}
-            className={`flex flex-col items-center gap-1 ${
-              currentScreen === dashboardScreen ? 'text-red-700' : 'text-stone-500'
-            }`}
+            className={`flex flex-col items-center gap-1 ${currentScreen === dashboardScreen ? 'text-red-700' : 'text-stone-500'}`}
           >
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-            </svg>
             <span className="text-xs">Home</span>
           </button>
-          
+
           {userType === 'customer' && (
             <button
               onClick={() => setCurrentScreen('bookings')}
-              className={`flex flex-col items-center gap-1 ${
-                currentScreen === 'bookings' ? 'text-red-700' : 'text-stone-500'
-              }`}
+              className={`flex flex-col items-center gap-1 ${currentScreen === 'bookings' ? 'text-red-700' : 'text-stone-500'}`}
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
               <span className="text-xs">Bookings</span>
             </button>
           )}
-          
+
           <button
             onClick={() => setCurrentScreen('directory')}
-            className={`flex flex-col items-center gap-1 ${
-              currentScreen === 'directory' ? 'text-red-700' : 'text-stone-500'
-            }`}
+            className={`flex flex-col items-center gap-1 ${currentScreen === 'directory' ? 'text-red-700' : 'text-stone-500'}`}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
             <span className="text-xs">Directory</span>
           </button>
-          
-          {userType === 'customer' && (
-            <button
-              onClick={() => setCurrentScreen('payments')}
-              className={`flex flex-col items-center gap-1 ${
-                currentScreen === 'payments' ? 'text-red-700' : 'text-stone-500'
-              }`}
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-              </svg>
-              <span className="text-xs">Support</span>
-            </button>
-          )}
-          
+
+          <button
+            onClick={() => setCurrentScreen('payments')}
+            className={`flex flex-col items-center gap-1 ${currentScreen === 'payments' ? 'text-red-700' : 'text-stone-500'}`}
+          >
+            <span className="text-xs">Payments</span>
+          </button>
+
           <button
             onClick={() => setCurrentScreen('profile')}
             className={`flex flex-col items-center gap-1 ${
-              currentScreen === 'profile' || currentScreen === 'edit-info' || currentScreen === 'addresses' || currentScreen === 'vehicles' || currentScreen === 'ai-chat' || currentScreen === 'privacy' || currentScreen === 'help' || currentScreen === 'notifications' || currentScreen === 'payment-methods' ? 'text-red-700' : 'text-stone-500'
+              ['profile', 'edit-info', 'addresses', 'vehicles', 'ai-chat', 'privacy', 'help', 'notifications', 'payment-methods', 'service-history', 'disputes'].includes(currentScreen)
+                || ['provider-crm', 'provider-marketing'].includes(currentScreen)
+                ? 'text-red-700'
+                : 'text-stone-500'
             }`}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
             <span className="text-xs">Profile</span>
           </button>
         </nav>
