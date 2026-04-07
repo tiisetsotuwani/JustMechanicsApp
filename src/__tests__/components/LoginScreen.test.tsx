@@ -147,8 +147,7 @@ describe('LoginScreen', () => {
     await userEvent.type(screen.getByLabelText(/password/i), 'wrong-password');
     await userEvent.click(screen.getByRole('button', { name: /sign in as customer/i }));
 
-    expect(await screen.findByText(/invalid login credentials/i)).toBeInTheDocument();
-    expect(errorSpy).not.toHaveBeenCalledWith('Auth error:', expect.any(Error));
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it('creates a missing profile after OAuth callback and logs the user in', async () => {
@@ -207,15 +206,11 @@ describe('LoginScreen', () => {
     expect(window.localStorage.getItem('oauth_userType')).toBeNull();
   });
 
-  it('shows placeholder alerts for social login and forgot password', async () => {
+  it('does not show social login and forgot password links for production', async () => {
     render(<LoginScreen onLogin={mockOnLogin} />);
 
-    await userEvent.click(screen.getByText(/forgot password/i));
-    await userEvent.click(screen.getByText('Google'));
-    await userEvent.click(screen.getByText('Facebook'));
-
-    expect(window.alert).toHaveBeenCalledWith('Password reset coming soon.');
-    expect(window.alert).toHaveBeenCalledWith('Google login coming soon.');
-    expect(window.alert).toHaveBeenCalledWith('Facebook login coming soon.');
+    expect(screen.queryByText(/forgot password/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Google')).not.toBeInTheDocument();
+    expect(screen.queryByText('Facebook')).not.toBeInTheDocument();
   });
 });

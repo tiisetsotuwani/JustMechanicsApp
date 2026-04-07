@@ -28,7 +28,7 @@ export function NotificationSettings({ onBack }: NotificationSettingsProps) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  // Load settings from localStorage on mount
+  // Load settings from API only
   useEffect(() => {
     const load = async () => {
       try {
@@ -38,14 +38,8 @@ export function NotificationSettings({ onBack }: NotificationSettingsProps) {
           ...(response.preferences || {}),
         }));
       } catch (error) {
-        const savedSettings = localStorage.getItem('notification_settings');
-        if (savedSettings) {
-          try {
-            setSettings(JSON.parse(savedSettings));
-          } catch {
-            // Ignore invalid local payload.
-          }
-        }
+        console.error('Error loading notification settings:', error);
+        // Do not fall back to localStorage - use defaults
       }
     };
 
@@ -62,7 +56,7 @@ export function NotificationSettings({ onBack }: NotificationSettingsProps) {
     
     try {
       await api.notifications.updatePreferences(settings);
-      localStorage.setItem('notification_settings', JSON.stringify(settings));
+      // Do not save to localStorage - API is the source of truth
       setMessage('Preferences saved successfully!');
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {

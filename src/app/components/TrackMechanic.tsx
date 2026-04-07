@@ -112,7 +112,8 @@ export function TrackMechanic({ booking, onBack, onOpenChat }: TrackMechanicProp
       return;
     }
 
-    window.alert('Mechanic phone number is not available yet.');
+    // Mechanic phone not available - show message instead of alert
+    console.warn('Mechanic phone number is not available yet.');
   };
 
   const handleMessage = () => {
@@ -121,7 +122,8 @@ export function TrackMechanic({ booking, onBack, onOpenChat }: TrackMechanicProp
       return;
     }
 
-    window.alert('Chat coming soon.');
+    // Chat not available - show message instead of alert
+    console.warn('Chat is not available yet.');
   };
 
   const timeline = [

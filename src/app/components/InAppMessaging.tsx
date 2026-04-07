@@ -188,8 +188,10 @@ export function InAppMessaging({
         setMessages(prev => prev.map(m => m.id === tempMessage.id ? data.message : m));
       }
     } catch (error) {
-      console.log('Message sent in demo mode:', error);
-      // In demo mode, just keep the temp message
+      console.error('Error sending message:', error);
+      // Remove demo fallback - show error instead
+      setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
+      // TODO: Show error message to user
     } finally {
       setIsSending(false);
     }

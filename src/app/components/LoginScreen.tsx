@@ -207,44 +207,17 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         } catch (backendError: unknown) {
           if (isExistingAccountError(backendError)) {
             try {
-              const existingAccountSignin = (await api.auth.signin(email, password)) as {
-                profile?: Partial<UserProfile> & { userType?: 'customer' | 'provider' };
-                session: { access_token: string };
-              };
-              const existingUserType = existingAccountSignin.profile?.userType || userType;
-              onLogin(
-                existingUserType,
-                existingAccountSignin.session.access_token,
-                existingAccountSignin.profile,
-                rememberMe,
-              );
+              const signinData = await api.auth.signin(email, password);
+              onLogin(userType, signinData.session.access_token, signinData.profile, rememberMe);
               return;
             } catch {
-              setIsSignup(false);
               throw new Error(
-                'An account with this email already exists. Please sign in with your existing password or reset it.',
+                'Account already exists. Please sign in with your existing password or reset it.',
               );
             }
           }
 
-          if (!shouldUseDemoFallback(backendError)) {
-            throw backendError;
-          }
-
-          console.warn('Backend unavailable, using demo mode:', getErrorMessage(backendError, 'Unknown error'));
-
-          const demoUser = {
-            email,
-            name,
-            phone,
-            userType,
-          };
-          const demoToken = `demo_${Date.now()}_${Math.random().toString(36)}`;
-
-          localStorage.setItem(`demo_user_${email}`, JSON.stringify({ ...demoUser, password }));
-          persistDemoSession(email, demoUser);
-
-          onLogin(userType, demoToken, demoUser, rememberMe);
+          throw backendError;
         }
       } else {
         try {
@@ -256,30 +229,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           const profileUserType = data.profile?.userType || userType;
           onLogin(profileUserType, data.session.access_token, data.profile, rememberMe);
         } catch (backendError: unknown) {
-          if (!shouldUseDemoFallback(backendError)) {
-            throw backendError;
-          }
-
-          console.warn('Backend unavailable, checking demo mode:', getErrorMessage(backendError, 'Unknown error'));
-
-          const savedUser = localStorage.getItem(`demo_user_${email}`);
-
-          if (savedUser) {
-            const user = JSON.parse(savedUser) as Partial<UserProfile> & {
-              password: string;
-              userType: 'customer' | 'provider';
-            };
-
-            if (user.password === password) {
-              const demoToken = `demo_${Date.now()}_${Math.random().toString(36)}`;
-              persistDemoSession(email, user);
-              onLogin(user.userType, demoToken, user, rememberMe);
-            } else {
-              throw new Error('Invalid email or password');
-            }
-          } else {
-            throw new Error('Backend is unavailable and no demo account found. Please try again later or create a new account.');
-          }
+          // Remove demo fallback for production
+          throw backendError;
         }
       }
     } catch (err: unknown) {
@@ -295,10 +246,6 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
   const handleSocialLogin = (provider: 'google' | 'facebook') => {
     window.alert(`${provider.charAt(0).toUpperCase() + provider.slice(1)} login coming soon.`);
-  };
-
-  const handleForgotPassword = () => {
-    window.alert('Password reset coming soon.');
   };
 
   return (
@@ -446,6 +393,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   />
                   Remember me
                 </label>
+                {/* Forgot password link hidden for production - reset flow not implemented */}
+                {/*
                 <button
                   type="button"
                   onClick={handleForgotPassword}
@@ -453,6 +402,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                 >
                   Forgot password?
                 </button>
+                */}
               </div>
             )}
 
@@ -478,6 +428,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             </p>
           </div>
 
+          {/* Social login buttons hidden for production - OAuth not fully implemented */}
+          {/*
           <div className="mt-6 pt-6 border-t border-gray-200">
             <p className="text-sm text-gray-600 text-center mb-4">Or continue with</p>
             <div className="grid grid-cols-2 gap-3">
@@ -509,6 +461,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
               Social login buttons are placeholder actions for now.
             </p>
           </div>
+          */}
         </div>
 
         <p className="text-white/80 text-sm text-center mt-6">
